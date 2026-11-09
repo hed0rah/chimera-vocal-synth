@@ -264,6 +264,8 @@ export interface GasState {
   z: number;
   temperature: number;
   pressure: number;
+  /** Z = P v / (R T): 1 for an ideal gas */
+  compressibility: number;
 }
 
 export interface AirwayReport {
@@ -274,6 +276,8 @@ export interface AirwayReport {
   water: number;
   /** under the water's saturation pressure at the airway's temperature: it would boil */
   boiling: boolean;
+  /** a main gas near its critical point: the real-gas model is good to 10 to 15 % there */
+  nearCritical: boolean;
   /** the factor the resonances move by, and in semitones */
   cRatio: number;
   semitones: number;

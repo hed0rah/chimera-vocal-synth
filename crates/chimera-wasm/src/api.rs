@@ -187,7 +187,7 @@ fn conditions_json(c: &Conditions) -> Value {
 }
 
 fn state_json(s: &atmosphere::GasState) -> Value {
-    json!({ "c": s.c, "rho": s.rho, "mu": s.mu, "nu": s.nu(), "gamma": s.gamma, "molarMass": s.molar_mass, "z": s.z(), "temperature": s.temperature, "pressure": s.pressure })
+    json!({ "c": s.c, "rho": s.rho, "mu": s.mu, "nu": s.nu(), "gamma": s.gamma, "molarMass": s.molar_mass, "z": s.z(), "temperature": s.temperature, "pressure": s.pressure, "compressibility": s.compressibility })
 }
 
 /// The airway's gas for a set of conditions, and what the page shows about it. `cRatio` is the
@@ -201,6 +201,7 @@ fn airway_json(c: &Conditions) -> Value {
         "outside": state_json(&a.outside),
         "water": a.water,
         "boiling": a.boiling,
+        "nearCritical": a.near_critical,
         "cRatio": ratio,
         "semitones": 12.0 * math::log2(ratio),
         "rhoRatio": a.gas.rho / Gas::BODY_AIR.rho,

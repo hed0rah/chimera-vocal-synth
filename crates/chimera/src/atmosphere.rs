@@ -16,7 +16,7 @@
 //!
 //! Units here are SI (K, Pa, kg/m³, m/s, Pa·s); [`Conditions::gas`] converts to the engine's CGS.
 
-use crate::math::{exp, js_max, js_min, sqrt};
+use crate::math::{acos, cbrt, cos, exp, js_max, js_min, ln, sqrt, PI};
 use crate::physics::Gas;
 
 /// Molar gas constant, J/(mol K).
@@ -146,6 +146,8 @@ pub struct GasState {
     pub mu: f64,
     pub temperature: f64,
     pub pressure: f64,
+    /// compressibility Z = P v / (R T): 1 for an ideal gas; far from 1 the gas is a dense fluid
+    pub compressibility: f64,
 }
 
 impl GasState {
@@ -159,7 +161,82 @@ impl GasState {
     }
 }
 
-/// The ideal-gas state of `mix` at temperature `t` (K) and pressure `p` (Pa).
+/// Critical temperature (K), critical pressure (Pa) and acentric factor of each species, in SPECIES order
+/// (CoolProp's reference equations of state, which take them from NIST).
+pub const CRITICAL: [(f64, f64, f64); N_SPECIES] = [
+    (126.192, 3.3958e6, 0.0372),     // N2
+    (154.581, 5.0430e6, 0.0222),     // O2
+    (150.687, 4.863e6, -0.00219),    // Ar
+    (304.128, 7.3773e6, 0.22394),    // CO2
+    (5.1953, 2.2832e5, -0.38354),    // He
+    (33.145, 1.2964e6, -0.219),      // H2
+    (190.564, 4.5992e6, 0.01142),    // CH4
+    (647.096, 2.2064e7, 0.344292),   // H2O
+    (318.7232, 3.754983e6, 0.21),    // SF6
+];
+
+/// Peng-Robinson for the mix at (t, p), van der Waals mixing without binary parameters: molar volume
+/// (m^3/mol), compressibility, and the two derivatives the speed of sound needs, given cv of the ideal gas
+/// (J/(mol K)). Returns (v, z, cv, cp, dp_dv) for the root of least fugacity.
+fn peng_robinson(x: &[f64; N_SPECIES], t: f64, p: f64, cv_ig: f64) -> (f64, f64, f64, f64, f64) {
+    let sq2 = sqrt(2.0);
+    // a = g^2 with g = sum x_i sqrt(ac_i) s_i(T), s_i = 1 + kappa_i (1 - sqrt(T / Tc_i))
+    let (mut g, mut g1, mut g2, mut b) = (0.0, 0.0, 0.0, 0.0);
+    for i in 0..N_SPECIES {
+        if x[i] == 0.0 {
+            continue;
+        }
+        let (tc, pc, w) = CRITICAL[i];
+        let ac = 0.45724 * R * R * tc * tc / pc;
+        let kappa = 0.37464 + 1.54226 * w - 0.26992 * w * w;
+        let s = 1.0 + kappa * (1.0 - sqrt(t / tc));
+        let s1 = -kappa / (2.0 * sqrt(t * tc));
+        let s2 = kappa / (4.0 * sqrt(tc) * t * sqrt(t));
+        let ra = sqrt(ac);
+        g += x[i] * ra * s;
+        g1 += x[i] * ra * s1;
+        g2 += x[i] * ra * s2;
+        b += x[i] * 0.07780 * R * tc / pc;
+    }
+    let (a, a1, a2) = (g * g, 2.0 * g * g1, 2.0 * g1 * g1 + 2.0 * g * g2);
+    let aa = a * p / (R * R * t * t);
+    let bb = b * p / (R * t);
+    // Z^3 + c2 Z^2 + c1 Z + c0 = 0
+    let (c2, c1, c0) = (-(1.0 - bb), aa - 3.0 * bb * bb - 2.0 * bb, -(aa * bb - bb * bb - bb * bb * bb));
+    let q = (3.0 * c1 - c2 * c2) / 9.0;
+    let r = (9.0 * c2 * c1 - 27.0 * c0 - 2.0 * c2 * c2 * c2) / 54.0;
+    let disc = q * q * q + r * r;
+    let mut roots = [f64::NAN; 3];
+    if disc >= 0.0 {
+        let sd = sqrt(disc);
+        roots[0] = cbrt(r + sd) + cbrt(r - sd) - c2 / 3.0;
+    } else {
+        let th = acos(r / sqrt(-q * q * q));
+        for (k, z) in roots.iter_mut().enumerate() {
+            *z = 2.0 * sqrt(-q) * cos((th + 2.0 * PI * k as f64) / 3.0) - c2 / 3.0;
+        }
+    }
+    // the stable root: the least fugacity coefficient among the physical ones (Z > B)
+    let ln_phi = |z: f64| z - 1.0 - ln(z - bb) - aa / (2.0 * sq2 * bb) * ln((z + (1.0 + sq2) * bb) / (z + (1.0 - sq2) * bb));
+    let mut z = f64::NAN;
+    for &zr in &roots {
+        if zr.is_finite() && zr > bb && (z.is_nan() || ln_phi(zr) < ln_phi(z)) {
+            z = zr;
+        }
+    }
+    let v = z * R * t / p;
+    let den = v * v + 2.0 * b * v - b * b;
+    let dp_dt = R / (v - b) - a1 / den;
+    let dp_dv = -R * t / ((v - b) * (v - b)) + a * (2.0 * v + 2.0 * b) / (den * den);
+    // departure of cv: -T a'' / (2 sqrt2 b) ln((v + (1 - sqrt2) b) / (v + (1 + sqrt2) b)), positive
+    let cv = cv_ig - t * a2 / (2.0 * sq2 * b) * ln((v + (1.0 - sq2) * b) / (v + (1.0 + sq2) * b));
+    let cp = cv - t * dp_dt * dp_dt / dp_dv;
+    (v, z, cv, cp, dp_dv)
+}
+
+/// The state of `mix` at temperature `t` (K) and pressure `p` (Pa): Peng-Robinson for density and the speed
+/// of sound (an ideal gas at low density, a dense fluid near a critical point), with the ideal-gas heat
+/// capacities above. Viscosity is the dilute gas's: not corrected for density.
 pub fn state(mix: &Mix, t: f64, p: f64) -> GasState {
     let total: f64 = mix.iter().map(|x| js_max(0.0, *x)).sum();
     let x = |i: usize| if total > 0.0 { js_max(0.0, mix[i]) / total } else { 0.0 };
@@ -190,7 +267,14 @@ pub fn state(mix: &Mix, t: f64, p: f64) -> GasState {
         }
         mu += (x(i) * mus[i]) / den;
     }
-    GasState { molar_mass: m, gamma, c: sqrt((gamma * R * t) / m), rho: (p * m) / (R * t), mu, temperature: t, pressure: p }
+    let _ = gamma;
+    let mut xs = [0.0; N_SPECIES];
+    for (i, v) in xs.iter_mut().enumerate() {
+        *v = x(i);
+    }
+    let (v, z, cv, cpr, dp_dv) = peng_robinson(&xs, t, p, (cp - 1.0) * R);
+    let gamma = cpr / cv;
+    GasState { molar_mass: m, gamma, c: sqrt(-(v * v / m) * gamma * dp_dv), rho: m / v, mu, temperature: t, pressure: p, compressibility: z }
 }
 
 /// Add water vapour at relative humidity `rh` (0..1) of the saturation pressure at `t`, diluting
@@ -234,6 +318,9 @@ pub struct Airway {
     /// the airway is below the water's saturation pressure at its temperature (the Armstrong
     /// limit for a body at 37 °C, about 6.3 kPa): its water would boil
     pub boiling: bool,
+    /// a species making up a tenth or more of the airway gas is near its critical point (0.9 to 1.2 Tc,
+    /// above 0.7 Pc), where Peng-Robinson's density and sound speed can be off by 10 to 15 %
+    pub near_critical: bool,
 }
 
 impl Conditions {
@@ -247,7 +334,12 @@ impl Conditions {
         let rf = reference();
         let gas = Gas { rho: Gas::BODY_AIR.rho * (st.rho / rf.rho), c: Gas::BODY_AIR.c * (st.c / rf.c), mu: Gas::BODY_AIR.mu * (st.mu / rf.mu) };
         let boiling = self.airway_humidity > 0.0 && water_saturation(self.airway_temperature) >= p;
-        Airway { gas, state: st, outside: state(&self.mix, self.temperature, p), water, boiling }
+        let near_critical = (0..N_SPECIES).any(|i| {
+            let (tc, pc, _) = CRITICAL[i];
+            let tr = self.airway_temperature / tc;
+            mix[i] >= 0.1 && (0.9..1.2).contains(&tr) && p / pc > 0.7
+        });
+        Airway { gas, state: st, outside: state(&self.mix, self.temperature, p), water, boiling, near_critical }
     }
 
     /// The gas for [`crate::engine::Engine::set_gas`].

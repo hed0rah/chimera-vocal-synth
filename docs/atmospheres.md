@@ -29,11 +29,13 @@ body), so air never raises it.
 ## From conditions to a gas (`atmosphere.rs`)
 
 The controls are the physical conditions: mole fractions of N2, O2, Ar, CO2, He, H2, CH4, H2O and SF6, the
-pressure, the outside temperature, and the airway's temperature and relative humidity. For an ideal gas:
+pressure, the outside temperature, and the airway's temperature and relative humidity:
 
-- c = sqrt(gamma R T / M), with gamma from each species' cp(T): translation and rotation, harmonic
-  vibrational modes (Einstein), and hydrogen's quantised rotation as normal hydrogen (ortho:para 3:1);
-- rho = P M / (R T);
+- the ideal-gas heat capacity of each species, cp(T): translation and rotation, harmonic vibrational modes
+  (Einstein), and hydrogen's quantised rotation as normal hydrogen (ortho:para 3:1);
+- density and the speed of sound from the Peng-Robinson equation of state (critical constants and acentric
+  factors from NIST), c^2 = -(v^2 / M) (cp / cv) (dP/dv)_T with cv's real-gas departure from the same
+  equation. At low density it is the ideal gas; near a critical point it is a dense fluid;
 - mu from Sutherland's law per species, mixed by Wilke's rule;
 - water vapour from Buck's saturation pressure; below it the airway's water would boil (the Armstrong
   limit, 6.3 kPa at 37 °C), so a human preset below it breathes dry.
@@ -44,15 +46,19 @@ model's small errors cancel and `Conditions::EARTH` gives `Gas::BODY_AIR` exactl
 ## How good it is (`crates/chimera/tests/atmosphere.rs`)
 
 - Handbook values at 20 °C: air 343.2 m/s, 1.204 kg/m³, 18.1 µPa s; helium 1007 m/s; SF6 130 to 140 m/s.
-- Against real-fluid values (CoolProp) at nine sites: c within 2.5 %, rho within 4 % (Venus at 92 bar and
-  cold Titan are the least ideal); mu within 10 %, 25 % for hydrogen below 150 K.
+- Against real-fluid values (CoolProp) at nine sites: c within 2.5 %, rho within 4 %; mu within 10 %, 25 % for
+  hydrogen below 150 K. Against CoolProp's pure-fluid equations of state: 0.5 % in dilute gas (Mars, Titan,
+  Saturn, SF6), 1 % at Venus's surface and in heliox at 31 bar, 5 to 8 % in dense gas, 15 % next to a critical
+  point, which the airway reports (`near_critical`). The trap this fixed: a human airway on Venus's surface is
+  CO2 at 37 C and 92 bar, just above its critical point (31 C, 74 bar): an ideal gas put it at 157 kg/m^3,
+  the real fluid is 631.
 - Helium speech: in 80/20 heliox F3 rises with c (within 6 %) and F1 rises least, as measured in divers
   (Fant and Lindqvist 1968): the walls give the closed tract a resonance of its own.
 - Compressed air: the walls' closed-tract resonance adds in quadrature to every formant and grows with
   density, so at 2 and 11 bar every formant gains the same F^2 (within 15 %), the gain at 11 bar is ten
   times the gain at 2, and F1 moves most (Fant and Sonesson 1964). It is why a human on Venus's surface
-  (CO2 at 92 bar, warmed to 37 °C: 137 times air's density) has F1 near 2.2 kHz although c in the airway
-  is Mars's, and why F1 in a deep heliox dive sits higher than c alone would put it.
+  (CO2 at 92 bar warmed to 37 °C, a dense fluid near its critical point) has F1 near 3.2 kHz, and why F1 in
+  a deep heliox dive sits higher than c alone would put it.
 - Every preset renders a finite, audible human voice, and every creature a finite call, in every preset.
 
 ## Loudness
@@ -64,9 +70,9 @@ source and tract do) and the pressure at a listener. The page plays every place 
 
 | preset, human | output | at a listener |
 |---|---|---|
-| Mars, Jezero | +10.6 dB | -28.4 dB |
-| Venus, surface | -47.6 dB | -13.0 dB |
-| Titan | -3.5 dB | +9.0 dB |
+| Mars, Jezero | +10.6 dB | -28.5 dB |
+| Venus, surface | -56.3 dB | -21.9 dB |
+| Titan | -3.5 dB | +9.3 dB |
 | Saturn, 1 bar | +6.1 dB | -9.4 dB |
 | Pluto | +10.2 dB | -71.2 dB |
 | heliox at 300 m | -20.1 dB | -7.3 dB |
@@ -76,4 +82,4 @@ source and tract do) and the pressure at a listener. The page plays every place 
 - Fluid loading of the folds: the glottis is parametric, so its pitch is the performer's in every gas. Dense
   gas would lower a self-oscillating fold.
 - Propagation between the mouth and the listener: absorption, dispersion and delay over distance.
-- Real-gas behaviour at high pressure, beyond the ideal-gas ratios above.
+- Dense-fluid viscosity: viscosity is the dilute gas's at every pressure.

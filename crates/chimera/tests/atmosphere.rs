@@ -164,3 +164,34 @@ fn in_compressed_air_the_walls_add_the_same_f_squared_to_every_formant() {
     assert!(close(mean(&g11) / mean(&g2), 10.0, 0.1), "gain ratio {}", mean(&g11) / mean(&g2));
     assert!(eleven[0] / one[0] > 1.5 && eleven[2] / one[2] < 1.1, "F1 moves most: {one:?} -> {eleven:?}");
 }
+
+/// Peng-Robinson against CoolProp's reference equations of state (pure fluids): within 0.5 % in dilute gas,
+/// a few % in dense gas, and 15 % next to a critical point, which the airway reports as near_critical.
+#[test]
+fn the_real_gas_model_tracks_reference_equations_of_state() {
+    // species, T K, P Pa, rho kg/m3, c m/s (CoolProp 8.0), tolerance on each
+    let refs: &[(Species, f64, f64, f64, f64, f64)] = &[
+        (Species::CO2, 737.0, 9.2e6, 65.7008, 417.26, 0.01),     // Venus's surface
+        (Species::CO2, 230.0, 600.0, 0.0138, 240.00, 0.005),      // Mars
+        (Species::N2, 93.65, 146700.0, 5.4712, 193.36, 0.005),    // Titan
+        (Species::He, 303.15, 3.1e6, 4.8525, 1038.15, 0.01),     // a heliox dive
+        (Species::H2, 134.0, 1.0e5, 0.1809, 915.05, 0.005),       // Saturn's 1 bar level
+        (Species::SF6, 293.15, 101325.0, 6.1453, 133.85, 0.005),
+        (Species::CO2, 400.0, 2.0e7, 380.4992, 310.75, 0.05),     // dense
+        (Species::CH4, 250.0, 1.0e7, 112.4258, 392.22, 0.05),
+        (Species::Ar, 300.0, 2.0e7, 335.8421, 372.04, 0.05),
+        (Species::N2, 300.0, 3.0e7, 294.7812, 483.18, 0.08),
+        (Species::CO2, 310.15, 9.2e6, 631.2603, 258.59, 0.15),   // 1.02 Tc, 1.25 Pc: a human airway on Venus
+    ];
+    for &(sp, t, p, rho, c, tol) in refs {
+        let mut m = [0.0; atmosphere::N_SPECIES];
+        m[sp as usize] = 1.0;
+        let st = state(&m, t, p);
+        assert!(close(st.rho, rho, tol), "{sp:?} {t} K {p} Pa: rho {} vs {rho}", st.rho);
+        assert!(close(st.c, c, tol), "{sp:?} {t} K {p} Pa: c {} vs {c}", st.c);
+    }
+    // the ideal gas was 4x too thin there; the airway says it is near the critical point
+    let venus = atmosphere::preset("venus_surface").unwrap().conditions(Breather::Human).airway();
+    assert!(venus.near_critical && venus.state.compressibility < 0.4);
+    assert!(!Conditions::EARTH.airway().near_critical);
+}

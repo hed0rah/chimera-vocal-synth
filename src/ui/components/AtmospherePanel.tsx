@@ -99,7 +99,10 @@ function AtmospherePanel() {
             </dd>
             <dt>water vapour</dt>
             <dd>{(r.water * 100).toFixed(1)} %</dd>
+            <dt>compressibility Z</dt>
+            <dd>{r.airway.compressibility.toFixed(3)}{r.airway.compressibility < 0.9 ? " (a dense fluid)" : ""}</dd>
           </dl>
+          {r.nearCritical && <p className="atmo-warn">Near a critical point: the airway gas is between a gas and a liquid, and the real-gas model (Peng-Robinson) is good to about 10 to 15 % here.</p>}
           {r.boiling && <p className="atmo-warn">Below the water's saturation pressure at this airway temperature (the Armstrong limit at 37 °C is 6.3 kPa): a body's water would boil.</p>}
           <h3>Outside</h3>
           <dl className="atmo-read">
@@ -116,7 +119,7 @@ function AtmospherePanel() {
           </dl>
           <Toggle label={`Real loudness${l && l.real > LEVEL_CAP ? " (capped at +12 dB)" : ""}`} checked={a.realLevel} onChange={setReal} />
           <p className="atmo-hint">
-            Off, every place plays as loud as Earth and only the sound changes. On, you hear the pressure a listener would: the voice's airflow, measured on a reference vowel, times the density of the air it travels in. Ideal gas, within 2.5 % of real-fluid values for c at every preset.
+            Off, every place plays as loud as Earth and only the sound changes. On, you hear the pressure a listener would: the voice's airflow, measured on a reference vowel, times the density of the air it travels in. Real gas (Peng-Robinson): within 1 % of reference values at every preset's outside conditions.
           </p>
         </div>
       </div>
