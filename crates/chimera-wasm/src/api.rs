@@ -13,7 +13,10 @@ use chimera::phonetics::planner::{self, PhraseInput, PlanOptions};
 use chimera::phonetics::sing::{self, MelismaOptions, NoteOnOptions, SongOptions, SungNote};
 use chimera::phonetics::english::EnglishG2P;
 use chimera::phonetics::{Segment, Syllable, ipa, songs, syllables, vowel_data};
+use chimera::atmosphere::{self, Breather, Conditions};
+use chimera::physics::Gas;
 use chimera::voice::human_airway::HumanAirway;
+use chimera::voice::human_voice::airway_for;
 use serde_json::{Value, json};
 use std::cell::RefCell;
 
@@ -21,6 +24,7 @@ struct Model {
     id: usize,
     body: BodyMix,
     fs: f64,
+    gas: Gas,
     airway: HumanAirway,
 }
 
@@ -59,16 +63,29 @@ fn dispatch(st: &mut State, req: &Value) -> Res {
     match name {
         "version" => Ok(json!({ "layout": crate::LAYOUT_VERSION, "crate": env!("CARGO_PKG_VERSION") })),
         "catalog" => catalog(),
+        // ---------------------------------------------------------------- atmospheres
+        "atmospheres" => Ok(json!({
+            "species": atmosphere::SPECIES.iter().map(|s| json!({ "formula": s.formula, "name": s.name, "molarMass": s.molar_mass })).collect::<Vec<_>>(),
+            "presets": atmosphere::PRESETS.iter().map(|p| json!({ "id": p.id, "name": p.name, "mix": p.mix, "pressure": p.pressure, "temperature": p.temperature, "source": p.source,
+                "human": conditions_json(&p.conditions(Breather::Human)), "native": conditions_json(&p.conditions(Breather::Native)) })).collect::<Vec<_>>(),
+            "bodyTemperature": atmosphere::BODY_TEMPERATURE,
+        })),
+        "atmosphere" => {
+            let c = Conditions { mix: arg(req, "mix")?, pressure: arg(req, "pressure")?, temperature: arg(req, "temperature")?, airway_temperature: arg(req, "airwayTemperature")?, airway_humidity: arg(req, "airwayHumidity")? };
+            Ok(airway_json(&c))
+        }
         // ---------------------------------------------------------------- the anatomy model
         "model" => {
             // the main-thread mirror of the worklet's airway: same topology and node counts
             let body: BodyMix = arg(req, "body")?;
             let fs: f64 = arg(req, "sampleRate")?;
-            let m = chimera::voice::human_voice::oversample_for(fs) as f64;
-            let i = match st.models.iter().position(|x| x.body == body && x.fs == fs * m) {
+            let gas: Gas = if req.get("gas").is_some_and(|g| !g.is_null()) { arg(req, "gas")? } else { Gas::BODY_AIR };
+            let i = match st.models.iter().position(|x| x.body == body && x.fs == fs && x.gas == gas) {
                 Some(i) => i,
                 None => {
-                    st.models.push(Model { id: st.next_model, body, fs: fs * m, airway: HumanAirway::new(fs * m, body.body()) });
+                    // the voice's own rule for its rate and node counts (engine.rs make_voice)
+                    let (_, airway) = airway_for(fs, body.body(), chimera::voice::human_voice::oversample_for(fs), gas);
+                    st.models.push(Model { id: st.next_model, body, fs, gas, airway });
                     st.next_model += 1;
                     st.models.len() - 1
                 }
@@ -156,6 +173,31 @@ fn dispatch(st: &mut State, req: &Value) -> Res {
 }
 
 /// Everything constant the UI needs: articulators, bodies, defaults, sound catalogues.
+fn conditions_json(c: &Conditions) -> Value {
+    json!({ "mix": c.mix, "pressure": c.pressure, "temperature": c.temperature, "airwayTemperature": c.airway_temperature, "airwayHumidity": c.airway_humidity })
+}
+
+fn state_json(s: &atmosphere::GasState) -> Value {
+    json!({ "c": s.c, "rho": s.rho, "mu": s.mu, "nu": s.nu(), "gamma": s.gamma, "molarMass": s.molar_mass, "z": s.z(), "temperature": s.temperature, "pressure": s.pressure })
+}
+
+/// The airway's gas for a set of conditions, and what the page shows about it. `cRatio` is the
+/// factor the resonances move by (helium speech); the semitones are 12 log2 of it.
+fn airway_json(c: &Conditions) -> Value {
+    let a = c.airway();
+    let ratio = a.gas.c / Gas::BODY_AIR.c;
+    json!({
+        "gas": a.gas,
+        "airway": state_json(&a.state),
+        "outside": state_json(&a.outside),
+        "water": a.water,
+        "boiling": a.boiling,
+        "cRatio": ratio,
+        "semitones": 12.0 * math::log2(ratio),
+        "rhoRatio": a.gas.rho / Gas::BODY_AIR.rho,
+    })
+}
+
 fn catalog() -> Res {
     use chimera::anatomy::human::{ArticKey, BODY_CHILD, BODY_FEMALE, BODY_MALE, NEUTRAL};
     use chimera::control::articulators::ARTIC_SPECS;

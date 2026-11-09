@@ -279,6 +279,18 @@ pub unsafe extern "C" fn engine_set_body(h: *mut Handle, female: f64, child: f64
     h.engine.telemetry(&mut h.tele); // resize the telemetry buffers for the new voice
 }
 
+/// Fill the airways with a gas (CGS: rho g/cm³, c cm/s, mu poise), from the main thread's
+/// `atmosphere` call. Allocates (rebuilds the voice, as a body switch does).
+///
+/// # Safety
+/// `h` must be a live handle.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn engine_set_gas(h: *mut Handle, rho: f64, c: f64, mu: f64) {
+    let h = handle!(h);
+    h.engine.set_gas(chimera::physics::Gas { rho, c, mu });
+    h.engine.telemetry(&mut h.tele); // resize the telemetry buffers for the new voice
+}
+
 /// # Safety
 /// `h` must be a live handle.
 #[unsafe(no_mangle)]

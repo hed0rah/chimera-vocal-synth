@@ -150,9 +150,14 @@ impl CreatureVoice {
 
     /// The same creature breathing `gas`.
     pub fn new_in(def: &'static CreatureDef, fs_out: f64, gas: crate::physics::Gas, initial: &[(usize, f64)]) -> Self {
-        let m = js_max(1.0, js_round(def.oversample as f64 * if fs_out > 60000.0 { 0.5 } else { 1.0 })) as usize;
+        let mut m = js_max(1.0, js_round(def.oversample as f64 * if fs_out > 60000.0 { 0.5 } else { 1.0 })) as usize;
+        let mut sim = def.create(fs_out * m as f64, gas);
+        // as the human voice: a fast gas raises the internal rate until the airway is stable
+        while sim.net().is_some_and(|n| n.check_cfl() > crate::physics::MAX_CFL) && m < 32 {
+            m += 1;
+            sim = def.create(fs_out * m as f64, gas);
+        }
         let fs = fs_out * m as f64;
-        let sim = def.create(fs, gas);
         let ctrl_every = 64 * m;
         let mut performer = Vec::with_capacity(def.params.len());
         for (i, p) in def.params.iter().enumerate() {

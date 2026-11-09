@@ -17,7 +17,7 @@ pub const CM_H2O: f64 = 980.665;
 /// The gas filling an airway: everything the acoustics needs from it. An airway takes its gas
 /// when it is built (there is no global gas); [`Gas::BODY_AIR`] is the constants above, so an
 /// airway built in it renders exactly as before. Other gases come from [`crate::atmosphere`].
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Gas {
     /// density (g/cm³)
     pub rho: f64,
@@ -72,6 +72,10 @@ pub const WALL_SOFT: WallParams = WallParams { mass: 1.5, resistance: 1600.0, st
 pub const WALL_TRACHEA: WallParams = WallParams { mass: 0.6, resistance: 1000.0, stiffness: 1.0e6 };
 /// Nasal mucosa: lossy.
 pub const WALL_NASAL: WallParams = WallParams { mass: 1.0, resistance: 3000.0, stiffness: 1.0e6 };
+
+/// Highest Courant number an airway is built with. Air never needs more than 0.91 (the child
+/// body); a faster gas (helium, hydrogen) raises the internal rate until its airway is under it.
+pub const MAX_CFL: f64 = 0.95;
 
 /// Critical Reynolds number for onset of turbulence noise.
 pub const RE_CRIT: f64 = 1800.0;

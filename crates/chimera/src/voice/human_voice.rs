@@ -207,6 +207,21 @@ pub fn oversample_for(fs_out: f64) -> usize {
     js_max(1.0, (60000.0 / fs_out).floor() + 1.0) as usize
 }
 
+/// The airway a voice at `fs_out` builds in `gas`, and its oversampling factor: `oversample`,
+/// raised while the airway's Courant number is over [`crate::physics::MAX_CFL`]. The tubes keep
+/// a minimum number of sections, so in a fast gas (helium, hydrogen) the sections are shorter
+/// than the leapfrog allows at the usual rate. Air never raises it. The page's mirror of the
+/// voice builds through here too, so both have the same node counts.
+pub fn airway_for(fs_out: f64, body: HumanBody, oversample: usize, gas: crate::physics::Gas) -> (usize, HumanAirway) {
+    let mut m = oversample;
+    let mut airway = HumanAirway::new_in(fs_out * m as f64, body, gas);
+    while airway.net.check_cfl() > crate::physics::MAX_CFL && m < 16 {
+        m += 1;
+        airway = HumanAirway::new_in(fs_out * m as f64, body, gas);
+    }
+    (m, airway)
+}
+
 impl HumanVoice {
     /// A voice rendering at `fs_out`, simulating at `fs_out · oversample`.
     pub fn new(fs_out: f64, body: HumanBody, oversample: usize) -> Self {
@@ -215,9 +230,8 @@ impl HumanVoice {
 
     /// The same voice breathing `gas`.
     pub fn new_in(fs_out: f64, body: HumanBody, oversample: usize, gas: crate::physics::Gas) -> Self {
-        let m = oversample;
+        let (m, airway) = airway_for(fs_out, body, oversample, gas);
         let fs = fs_out * m as f64;
-        let airway = HumanAirway::new_in(fs, body, gas);
         let n_tract = airway.n_ph + airway.n_or;
         let mut v = HumanVoice {
             fs_out,
