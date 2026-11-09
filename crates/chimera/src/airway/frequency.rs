@@ -7,7 +7,6 @@
 
 use crate::airway::network::LinearElements;
 use crate::math::{PI, hypot, js_max, log10, sqrt};
-use crate::physics::{C_SOUND, RHO};
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct TransferResult {
@@ -110,8 +109,8 @@ pub fn transfer_function(el: &LinearElements, inject: usize, freqs: &[f64], cut:
             rad_yi[k] = 0.0;
             if let Some(r) = rad_of[k] {
                 let a = el.rad_area[r];
-                let lr = (8.0 * RHO) / (3.0 * PI * sqrt(PI * a));
-                let rr = (128.0 * RHO * C_SOUND) / (9.0 * PI * PI * a);
+                let lr = (8.0 * el.gas.rho) / (3.0 * PI * sqrt(PI * a));
+                let rr = (128.0 * el.gas.rho * el.gas.c) / (9.0 * PI * PI * a);
                 rad_yr[k] = 1.0 / rr;
                 rad_yi[k] = -1.0 / (w * lr);
                 gr += rad_yr[k];

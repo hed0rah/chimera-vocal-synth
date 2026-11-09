@@ -14,6 +14,48 @@ pub const RHO_C2: f64 = RHO * C_SOUND * C_SOUND;
 /// 1 cm H2O in dyn/cm².
 pub const CM_H2O: f64 = 980.665;
 
+/// The gas filling an airway: everything the acoustics needs from it. An airway takes its gas
+/// when it is built (there is no global gas); [`Gas::BODY_AIR`] is the constants above, so an
+/// airway built in it renders exactly as before. Other gases come from [`crate::atmosphere`].
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Gas {
+    /// density (g/cm³)
+    pub rho: f64,
+    /// speed of sound (cm/s)
+    pub c: f64,
+    /// dynamic viscosity (poise)
+    pub mu: f64,
+}
+
+impl Gas {
+    /// Warm, saturated air in a human airway: the constants the engine was tuned in.
+    pub const BODY_AIR: Gas = Gas { rho: RHO, c: C_SOUND, mu: MU };
+
+    /// kinematic viscosity (cm²/s)
+    #[inline]
+    pub fn nu(&self) -> f64 {
+        self.mu / self.rho
+    }
+
+    /// ρc², the bulk modulus (dyn/cm²), multiplied in the same order as [`RHO_C2`]
+    #[inline]
+    pub fn rho_c2(&self) -> f64 {
+        self.rho * self.c * self.c
+    }
+
+    /// characteristic impedance ρc (g/(cm²·s), 10 rayl)
+    #[inline]
+    pub fn z(&self) -> f64 {
+        self.rho * self.c
+    }
+}
+
+impl Default for Gas {
+    fn default() -> Gas {
+        Gas::BODY_AIR
+    }
+}
+
 /// Soft-tissue wall parameters per unit area (Ishizaka, French & Flanagan 1975, cheek/neck).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct WallParams {

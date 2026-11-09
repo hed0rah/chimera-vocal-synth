@@ -17,7 +17,7 @@
 //! Real time: `step()` and the control-rate setters allocate nothing.
 
 use crate::math::{PI, Rng, cbrt, exp, js_max, js_min, sqrt};
-use crate::physics::{C_SOUND, MU, NU, RE_CRIT, RHO, RHO_C2, WallParams};
+use crate::physics::{Gas, RE_CRIT, WallParams};
 
 /// Initial cross-sectional area(s) of a tube.
 #[derive(Clone, Debug)]
@@ -158,6 +158,7 @@ pub struct LinearElements {
     pub fixed: Vec<bool>,
     pub rad_nodes: Vec<usize>,
     pub rad_area: Vec<f64>,
+    pub gas: Gas,
 }
 
 /// A turbulence noise source request (control rate).
@@ -204,6 +205,8 @@ pub struct NoiseSource {
 #[derive(Clone, Debug)]
 pub struct AirwayNetwork {
     pub fs: f64,
+    /// the gas filling the airway, fixed when the network is built
+    pub gas: Gas,
     pub t: f64,
     inv_t: f64,
 
@@ -331,8 +334,15 @@ pub struct AirwayNetwork {
 
 impl AirwayNetwork {
     pub fn new(fs: f64) -> Self {
+        Self::new_in(fs, Gas::BODY_AIR)
+    }
+
+    /// A network filled with `gas`. Section lengths are chosen by the builder from `gas.c`
+    /// (the leapfrog's Courant limit), so build the tubes knowing the gas.
+    pub fn new_in(fs: f64, gas: Gas) -> Self {
         AirwayNetwork {
             fs,
+            gas,
             t: 1.0 / fs,
             inv_t: fs,
             tubes: Vec::new(),
@@ -618,13 +628,14 @@ impl AirwayNetwork {
 
     /// Courant number of the shortest non-fixed section (informational).
     pub fn check_cfl(&self) -> f64 {
+        let c_sound = self.gas.c;
         let mut min_dx = f64::INFINITY;
         for k in 0..self.n_nodes {
             if !self.fixed[k] {
                 min_dx = js_min(min_dx, self.dx_target[k]);
             }
         }
-        (C_SOUND * self.t) / min_dx
+        (c_sound * self.t) / min_dx
     }
 
     // ---------------------------------------------------------------- control-rate API
@@ -767,6 +778,10 @@ impl AirwayNetwork {
 
     /// Advance one internal sample. Returns radiated pressure (arbitrary units ∝ dU_rad/dt).
     pub fn step(&mut self) -> f64 {
+        let rho = self.gas.rho;
+        let c_sound = self.gas.c;
+        let mu = self.gas.mu;
+        let rho_c2 = self.gas.rho_c2();
         let n = self.n_nodes;
         let nb = self.n_branches;
         let t = self.t;
@@ -863,9 +878,9 @@ impl AirwayNetwork {
         }
 
         // 3) branches
-        let visc = sqrt((RHO * MU * self.viscous_omega) / 2.0) * self.viscous_scale;
+        let visc = sqrt((rho * mu * self.viscous_omega) / 2.0) * self.viscous_scale;
         let closed = self.closed_area;
-        let half_rho = 0.5 * RHO;
+        let half_rho = 0.5 * rho;
         let enable_energy_safe = self.energy_safe;
         let symmetric = self.symmetric_kinetic;
         {
@@ -944,13 +959,13 @@ impl AirwayNetwork {
                     }
                     let ip = 1.0 / ap;
                     let len = port_len[j];
-                    let mut ll = RHO * len * ip;
+                    let mut ll = rho * len * ip;
                     if port_half[j] {
                         ll += half_rho * (half_l[a] + half_l[b]);
                     }
                     l = ll;
                     let w = port_slit[j];
-                    let mut rr = if w > 0.0 { (12.0 * MU * len * w * w) * ip * ip * ip } else { visc * 2.0 * sqrt(PI) * len * sqrt(ap) * ip * ip };
+                    let mut rr = if w > 0.0 { (12.0 * mu * len * w * w) * ip * ip * ip } else { visc * 2.0 * sqrt(PI) * len * sqrt(ap) * ip * ip };
                     rr += port_extra_r[j];
                     r = rr;
                     // kinetic: entrance (contraction) + exit (jet expansion into the downstream node)
@@ -1050,7 +1065,7 @@ impl AirwayNetwork {
                 }
                 continue;
             }
-            let mut c = self.vol[k] / RHO_C2;
+            let mut c = self.vol[k] / rho_c2;
             // junction stability: local breathing mode ω² ≈ ΣL⁻¹/C must satisfy T²ω² ≤ 2.4
             if self.is_junction[k] && self.enable_junction_floor {
                 let c_min = (t2 * self.inv_lsum[k]) / 2.4;
@@ -1064,8 +1079,8 @@ impl AirwayNetwork {
             } else {
                 let r = r as usize;
                 let a = if self.area[k] > 1e-4 { self.area[k] } else { 1e-4 };
-                let lr = (8.0 * RHO) / (3.0 * PI * sqrt(PI * a));
-                let rr = (128.0 * RHO * C_SOUND) / (9.0 * PI * PI * a);
+                let lr = (8.0 * rho) / (3.0 * PI * sqrt(PI * a));
+                let rr = (128.0 * rho * c_sound) / (9.0 * PI * PI * a);
                 let p_old = self.p[k];
                 // energy-safe: when the radiation inertance grows (aperture closing) conserve momentum
                 let lp = self.rad_l_prev[r];
@@ -1095,6 +1110,7 @@ impl AirwayNetwork {
     }
 
     fn compute_noise(&mut self) {
+        let nu = self.gas.nu();
         // white noise power per Hz scales with fs: normalise to a 96 kHz reference
         let scale = self.noise_scale * sqrt(96000.0 / self.fs);
         let sat = 12000.0 * 12000.0 - RE_CRIT * RE_CRIT;
@@ -1105,7 +1121,7 @@ impl AirwayNetwork {
             let mut amp = 0.0;
             if a > self.closed_area {
                 // Re = v·d_h/ν with d_h = 2√(A/π) → Re = |U|·2/(ν·√(πA))
-                let re = (u.abs() * 2.0) / (NU * sqrt(PI * a));
+                let re = (u.abs() * 2.0) / (nu * sqrt(PI * a));
                 if re > RE_CRIT {
                     let x = re * re - RE_CRIT * RE_CRIT;
                     amp = (s.gain * scale * x) / (1.0 + x / sat); // bounded growth at very high Re
@@ -1139,9 +1155,12 @@ impl AirwayNetwork {
     /// frequency-domain analysis. Same formulas as step(); kinetic losses are omitted (they
     /// vanish for small signals about zero mean flow).
     pub fn linear_elements(&self) -> LinearElements {
+        let rho = self.gas.rho;
+        let mu = self.gas.mu;
+        let rho_c2 = self.gas.rho_c2();
         let n = self.n_nodes;
         let nb = self.n_branches;
-        let visc = sqrt((RHO * MU * self.viscous_omega) / 2.0) * self.viscous_scale;
+        let visc = sqrt((rho * mu * self.viscous_omega) / 2.0) * self.viscous_scale;
         let a_t = &self.area_target;
         let dx = &self.dx_target;
         let mut l = vec![0.0; nb];
@@ -1157,7 +1176,7 @@ impl AirwayNetwork {
                     continue;
                 }
                 open[j] = true;
-                l[j] = 0.5 * RHO * (dx[a] * ia + dx[b] * ib);
+                l[j] = 0.5 * rho * (dx[a] * ia + dx[b] * ib);
                 r[j] = 0.5 * visc * (self.wall_perim[a] * dx[a] * sqrt(a_t[a]) * ia * ia * self.visc_f[a] + self.wall_perim[b] * dx[b] * sqrt(a_t[b]) * ib * ib * self.visc_f[b]);
             } else {
                 let ap = self.port_area_target[j];
@@ -1167,16 +1186,16 @@ impl AirwayNetwork {
                 open[j] = true;
                 let ip = 1.0 / ap;
                 let len = self.port_len[j];
-                l[j] = RHO * len * ip + if self.port_half[j] { 0.5 * RHO * (dx[a] * ia + dx[b] * ib) } else { 0.0 };
+                l[j] = rho * len * ip + if self.port_half[j] { 0.5 * rho * (dx[a] * ia + dx[b] * ib) } else { 0.0 };
                 let w = self.port_slit[j];
-                r[j] = (if w > 0.0 { 12.0 * MU * len * w * w * ip * ip * ip } else { visc * 2.0 * sqrt(PI) * len * sqrt(ap) * ip * ip }) + self.port_extra_r[j];
+                r[j] = (if w > 0.0 { 12.0 * mu * len * w * w * ip * ip * ip } else { visc * 2.0 * sqrt(PI) * len * sqrt(ap) * ip * ip }) + self.port_extra_r[j];
             }
         }
         let mut c = vec![0.0; n];
         let mut wall_area = vec![0.0; n];
         for k in 0..n {
             let a = js_max(a_t[k], self.min_node_area);
-            c[k] = (a * dx[k]) / RHO_C2;
+            c[k] = (a * dx[k]) / rho_c2;
             wall_area[k] = if self.has_wall[k] { self.wall_perim[k] * sqrt(a) * dx[k] } else { 0.0 };
         }
         LinearElements {
@@ -1196,6 +1215,7 @@ impl AirwayNetwork {
             fixed: self.fixed.clone(),
             rad_nodes: self.rad_nodes.clone(),
             rad_area: self.rad_nodes.iter().map(|&k| js_max(a_t[k], 1e-4)).collect(),
+            gas: self.gas,
         }
     }
 

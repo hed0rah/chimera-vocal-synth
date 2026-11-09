@@ -2,16 +2,16 @@
 
 use crate::airway::network::{AirwayNetwork, Area, PortSpec, Tube, TubeSpec};
 use crate::math::{js_max, js_min};
-use crate::physics::{C_SOUND, RHO, WallParams};
+use crate::physics::{Gas, WallParams};
 
-/// Smallest stable section length at this internal rate (CFL 0.93).
-pub fn dx_min(fs: f64) -> f64 {
-    C_SOUND / fs / 0.93
+/// Smallest stable section length at this internal rate in this gas (CFL 0.93).
+pub fn dx_min(fs: f64, gas: Gas) -> f64 {
+    gas.c / fs / 0.93
 }
 
 /// Number of sections for a tube: as fine as stability allows, but at least `min`, at most `max`.
-pub fn sections(fs: f64, length: f64, min: f64, max: f64, coarse: f64) -> usize {
-    js_max(min, js_min(max, (length / (dx_min(fs) * coarse)).floor())) as usize
+pub fn sections(fs: f64, gas: Gas, length: f64, min: f64, max: f64, coarse: f64) -> usize {
+    js_max(min, js_min(max, (length / (dx_min(fs, gas) * coarse)).floor())) as usize
 }
 
 /// A tube's initial area: uniform, or a function of position u ∈ (0,1).
@@ -33,7 +33,7 @@ pub struct TubeOpts {
 }
 
 pub fn tube(net: &mut AirwayNetwork, name: &str, fs: f64, length: f64, area: TubeArea, opts: TubeOpts) -> Tube {
-    let n = sections(fs, length, opts.min.unwrap_or(3.0), opts.max.unwrap_or(120.0), opts.coarse.unwrap_or(1.0));
+    let n = sections(fs, net.gas, length, opts.min.unwrap_or(3.0), opts.max.unwrap_or(120.0), opts.coarse.unwrap_or(1.0));
     let areas = match area {
         TubeArea::Uniform(a) => Area::Uniform(a),
         TubeArea::Profile(f) => Area::Profile((0..n).map(|i| f((i as f64 + 0.5) / n as f64)).collect()),
@@ -50,7 +50,7 @@ pub fn tube(net: &mut AirwayNetwork, name: &str, fs: f64, length: f64, area: Tub
 /// Lungs/air-sac pressure node feeding a tube through a mildly resistive connection.
 pub fn lungs(net: &mut AirwayNetwork, into: usize, area: f64) -> usize {
     let node = net.add_pressure_node("lungs");
-    net.add_port(node, into, PortSpec::new(area, 1.0).kinetic(0.0, 0.0).resistance((0.5 * RHO * C_SOUND) / area));
+    net.add_port(node, into, PortSpec::new(area, 1.0).kinetic(0.0, 0.0).resistance((0.5 * net.gas.rho * net.gas.c) / area));
     node
 }
 

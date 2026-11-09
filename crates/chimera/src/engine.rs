@@ -15,6 +15,7 @@ use crate::control::score::{Gesture, GestureScore};
 use crate::creatures::types::CreatureDef;
 use crate::creatures::voice::{CreatureTelemetry, CreatureVoice};
 use crate::phonetics::beatbox::{BeatStep, MAX_SOUND_GESTURES};
+use crate::physics::Gas;
 use crate::voice::human_voice::{HumanVoice, SourcePatch, VoiceTelemetry, oversample_for};
 
 /// Samples per sub-block: the browser's render quantum, kept for every host.
@@ -56,17 +57,19 @@ pub struct Engine {
     beat: BeatPlayer,
     /// a creature playing instead of the human voice (whose clock then stands still)
     creature: Option<CreatureVoice>,
+    /// the gas every airway is built in
+    gas: Gas,
 }
 
 impl Engine {
     pub fn new(sample_rate: f64) -> Engine {
         crate::init();
         let body = BodyMix::MALE;
-        Engine { sample_rate, body, voice: Self::make_voice(sample_rate, body), gate_level: 0.0, pos: 0, scratch: Vec::with_capacity(MAX_SCHEDULE), beat: BeatPlayer::new(), creature: None }
+        Engine { sample_rate, body, voice: Self::make_voice(sample_rate, body, Gas::BODY_AIR), gate_level: 0.0, pos: 0, scratch: Vec::with_capacity(MAX_SCHEDULE), beat: BeatPlayer::new(), creature: None, gas: Gas::BODY_AIR }
     }
 
-    fn make_voice(fs: f64, body: BodyMix) -> HumanVoice {
-        let mut v = HumanVoice::new(fs, body.body(), oversample_for(fs));
+    fn make_voice(fs: f64, body: BodyMix, gas: Gas) -> HumanVoice {
+        let mut v = HumanVoice::new_in(fs, body.body(), oversample_for(fs), gas);
         v.set_source(&SourcePatch::f0(default_f0(body)));
         v
     }
@@ -88,7 +91,7 @@ impl Engine {
     pub fn set_body(&mut self, body: impl Into<BodyMix>) -> VoiceInfo {
         let body: BodyMix = body.into();
         let body = BodyMix::new(body.female, body.child);
-        let prev = core::mem::replace(&mut self.voice, Self::make_voice(self.sample_rate, body));
+        let prev = core::mem::replace(&mut self.voice, Self::make_voice(self.sample_rate, body, self.gas));
         self.body = body;
         let mut src = SourcePatch::from_source(&prev.source);
         src.f0 = Some(default_f0(body));
@@ -130,11 +133,32 @@ impl Engine {
     /// these settings (param index, value). Returns its definition. Allocates (a new airway).
     pub fn set_creature(&mut self, def: Option<&'static CreatureDef>, initial: &[(usize, f64)]) -> Option<&'static CreatureDef> {
         self.creature = def.map(|d| {
-            let mut c = CreatureVoice::new(d, self.sample_rate, initial);
+            let mut c = CreatureVoice::new_in(d, self.sample_rate, self.gas, initial);
             c.set_gate(self.gate_level);
             c
         });
         def
+    }
+
+    pub fn gas(&self) -> Gas {
+        self.gas
+    }
+
+    /// Fill every airway with `gas`: the human voice is rebuilt as a body switch rebuilds it
+    /// (the performer's settings carry over) and a playing creature is rebuilt with its
+    /// performer's settings. Allocates (new airway networks).
+    pub fn set_gas(&mut self, gas: Gas) -> VoiceInfo {
+        self.gas = gas;
+        if let Some(c) = self.creature.as_ref() {
+            let def = c.def;
+            let initial: Vec<(usize, f64)> = c.performer.iter().copied().enumerate().collect();
+            self.set_creature(Some(def), &initial);
+        }
+        let pitch = self.voice.source.f0;
+        let info = self.set_body(self.body);
+        // a gas change is not a new body: keep the performer's pitch
+        self.voice.set_source(&SourcePatch { f0: Some(pitch), ..Default::default() });
+        info
     }
 
     pub fn creature(&self) -> Option<&CreatureVoice> {

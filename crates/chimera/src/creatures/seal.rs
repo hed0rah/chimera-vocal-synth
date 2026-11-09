@@ -24,8 +24,8 @@ pub struct Seal {
     pulse_gate: f64,
 }
 
-fn create(fs: f64) -> Box<dyn CreatureSim> {
-    let mut a = mammal_airway(fs, MammalSpec { trachea: (24.0, 4.0), pharynx: (11.0, 3.2), oral: (12.0, 3.6), nasal: Some((12.0, 1.5)), wall: None, wall_radiation: Some(0.6), coarse: None, nasal_radiates: None }, |_, _| {});
+fn create(fs: f64, gas: crate::physics::Gas) -> Box<dyn CreatureSim> {
+    let mut a = mammal_airway(fs, gas, MammalSpec { trachea: (24.0, 4.0), pharynx: (11.0, 3.2), oral: (12.0, 3.6), nasal: Some((12.0, 1.5)), wall: None, wall_radiation: Some(0.6), coarse: None, nasal_radiates: None }, |_, _| {});
     let g = &mut a.glottis_src;
     g.params.jitter = 0.002;
     g.params.shimmer = 0.01;

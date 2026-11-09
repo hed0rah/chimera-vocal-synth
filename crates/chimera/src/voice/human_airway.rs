@@ -7,7 +7,7 @@
 use crate::airway::network::{AirwayNetwork, Area, NoiseSpec, PortSpec, Tube, TubeSpec};
 use crate::anatomy::human::{HumanArtic, HumanBody, HumanFrame, HumanVocalTract};
 use crate::math::{js_max, js_min, js_round, smoothstep as smooth, sqrt};
-use crate::physics::{C_SOUND, RHO, WALL_NASAL, WALL_SOFT, WALL_TRACHEA};
+use crate::physics::{Gas, WALL_NASAL, WALL_SOFT, WALL_TRACHEA};
 
 #[derive(Clone, Copy, Debug)]
 pub struct NoiseGains {
@@ -67,10 +67,15 @@ pub struct HumanAirway {
 impl HumanAirway {
     /// `fs`: internal sample rate (Hz).
     pub fn new(fs: f64, body: HumanBody) -> Self {
+        Self::new_in(fs, body, Gas::BODY_AIR)
+    }
+
+    /// The airway filled with `gas`: the section counts follow its speed of sound.
+    pub fn new_in(fs: f64, body: HumanBody, gas: Gas) -> Self {
         let k = body.scale;
         let tract = HumanVocalTract::new(body);
-        let mut net = AirwayNetwork::new(fs);
-        let dx_min = (C_SOUND / fs) / 0.93;
+        let mut net = AirwayNetwork::new_in(fs, gas);
+        let dx_min = (gas.c / fs) / 0.93;
         // node counts from the shortest expected lengths (larynx raised, lips retracted)
         let ph_min_len = 8.7 * k * (0.55 + 0.45 * body.pharynx) - 1.6 * k;
         let or_min_len = 8.3 * k - 1.0 * k;
@@ -103,7 +108,7 @@ impl HumanAirway {
 
         let lungs = net.add_pressure_node("lungs");
         let tr_a = 2.5 * k * k;
-        net.add_port(lungs, trachea.first_node(), PortSpec::new(tr_a, 1.0).kinetic(0.0, 0.0).resistance((0.5 * RHO * C_SOUND) / tr_a));
+        net.add_port(lungs, trachea.first_node(), PortSpec::new(tr_a, 1.0).kinetic(0.0, 0.0).resistance((0.5 * gas.rho * gas.c) / tr_a));
         let glottis_port = net.add_port(trachea.last_node(), pharynx.first_node(), PortSpec::new(0.0, 0.3 * k).kinetic(0.37, 1.0).slit(1.4 * k));
         net.connect(pharynx.last_node(), oral.first_node());
         let velum_port = net.add_port(pharynx.last_node(), nasal.first_node(), PortSpec::new(0.0, 1.0 * k).kinetic(0.3, 0.8));

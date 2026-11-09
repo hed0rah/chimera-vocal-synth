@@ -38,8 +38,8 @@ pub struct Songbird {
     beak_areas: Vec<f64>,
 }
 
-fn create(fs: f64) -> Box<dyn CreatureSim> {
-    let mut net = AirwayNetwork::new(fs);
+fn create(fs: f64, gas: crate::physics::Gas) -> Box<dyn CreatureSim> {
+    let mut net = AirwayNetwork::new_in(fs, gas);
     let bron_l = tube(&mut net, "bronchusL", fs, 0.8, TubeArea::Uniform(0.02), TubeOpts::default());
     let bron_r = tube(&mut net, "bronchusR", fs, 0.8, TubeArea::Uniform(0.02), TubeOpts::default());
     let trachea = tube(&mut net, "trachea", fs, 3.6, TubeArea::Uniform(0.045), TubeOpts { wall: Some(WALL_TRACHEA), ..Default::default() });

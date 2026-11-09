@@ -21,8 +21,8 @@ pub struct Alligator {
     velum: usize,
 }
 
-fn create(fs: f64) -> Box<dyn CreatureSim> {
-    let mut a = mammal_airway(fs, MammalSpec { trachea: (30.0, 6.0), pharynx: (18.0, 7.0), oral: (24.0, 6.0), nasal: Some((26.0, 1.8)), wall: None, wall_radiation: Some(1.0), coarse: Some(1.3), nasal_radiates: None }, |_, _| {});
+fn create(fs: f64, gas: crate::physics::Gas) -> Box<dyn CreatureSim> {
+    let mut a = mammal_airway(fs, gas, MammalSpec { trachea: (30.0, 6.0), pharynx: (18.0, 7.0), oral: (24.0, 6.0), nasal: Some((26.0, 1.8)), wall: None, wall_radiation: Some(1.0), coarse: Some(1.3), nasal_radiates: None }, |_, _| {});
     a.glottis_src.threshold = 1.5 * CMH2O;
     let nasal = a.nasal.expect("alligator has a nasal tube");
     let velum = a.velum.expect("alligator has a velum");

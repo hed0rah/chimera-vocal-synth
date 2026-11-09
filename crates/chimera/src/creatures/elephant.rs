@@ -28,11 +28,12 @@ pub struct Elephant {
     mode: f64,
 }
 
-fn create(fs: f64) -> Box<dyn CreatureSim> {
+fn create(fs: f64, gas: crate::physics::Gas) -> Box<dyn CreatureSim> {
     let mut trunk: Option<Tube> = None;
     let mut valve = 0usize;
     let mut a = mammal_airway(
         fs,
+        gas,
         MammalSpec { trachea: (45.0, 14.0), pharynx: (32.0, 14.0), oral: (28.0, 10.0), nasal: Some((14.0, 6.0)), wall: None, wall_radiation: Some(0.6), coarse: Some(1.2), nasal_radiates: Some(false) },
         |net, parts| {
             // the "nasal" tube is the trunk base; a lip-like valve leads into the long trunk

@@ -48,8 +48,8 @@ pub struct MammalAirway {
     pub oral_area: Vec<f64>,
 }
 
-pub fn mammal_airway(fs: f64, s: MammalSpec, extra: impl FnOnce(&mut AirwayNetwork, &MammalTubes)) -> MammalAirway {
-    let mut net = AirwayNetwork::new(fs);
+pub fn mammal_airway(fs: f64, gas: crate::physics::Gas, s: MammalSpec, extra: impl FnOnce(&mut AirwayNetwork, &MammalTubes)) -> MammalAirway {
+    let mut net = AirwayNetwork::new_in(fs, gas);
     let wall = s.wall.unwrap_or(WALL_SOFT);
     let coarse = s.coarse.unwrap_or(1.0);
     let wall_radiation = s.wall_radiation.unwrap_or(0.25);

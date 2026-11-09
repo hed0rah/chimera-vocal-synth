@@ -260,7 +260,7 @@ pub struct CreatureDef {
     #[serde(skip)]
     pub events: Vec<&'static str>,
     #[serde(skip)]
-    pub create: fn(f64) -> Box<dyn CreatureSim>,
+    pub create: fn(f64, crate::physics::Gas) -> Box<dyn CreatureSim>,
 }
 
 impl CreatureDef {
@@ -280,8 +280,8 @@ impl CreatureDef {
         self.calls.iter().position(|c| c.id == id)
     }
 
-    pub fn create(&self, fs: f64) -> Box<dyn CreatureSim> {
-        (self.create)(fs)
+    pub fn create(&self, fs: f64, gas: crate::physics::Gas) -> Box<dyn CreatureSim> {
+        (self.create)(fs, gas)
     }
 }
 

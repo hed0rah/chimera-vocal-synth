@@ -210,9 +210,14 @@ pub fn oversample_for(fs_out: f64) -> usize {
 impl HumanVoice {
     /// A voice rendering at `fs_out`, simulating at `fs_out · oversample`.
     pub fn new(fs_out: f64, body: HumanBody, oversample: usize) -> Self {
+        Self::new_in(fs_out, body, oversample, crate::physics::Gas::BODY_AIR)
+    }
+
+    /// The same voice breathing `gas`.
+    pub fn new_in(fs_out: f64, body: HumanBody, oversample: usize, gas: crate::physics::Gas) -> Self {
         let m = oversample;
         let fs = fs_out * m as f64;
-        let airway = HumanAirway::new(fs, body);
+        let airway = HumanAirway::new_in(fs, body, gas);
         let n_tract = airway.n_ph + airway.n_or;
         let mut v = HumanVoice {
             fs_out,

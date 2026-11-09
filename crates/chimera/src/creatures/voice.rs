@@ -114,7 +114,7 @@ pub struct CreatureVoice {
     pub sim: Box<dyn CreatureSim>,
     /// performer settings, targets (performer or call automation) and smoothed values, indexed
     /// like the def's params
-    performer: Vec<f64>,
+    pub(crate) performer: Vec<f64>,
     target: Vec<f64>,
     value: Vec<f64>,
     pub gate: f64,
@@ -145,9 +145,14 @@ impl CreatureVoice {
     /// A voice at output rate `fs_out`. `initial` sets parameters by index (a later entry for the
     /// same index wins; non-finite values are ignored, as missing keys were in TS).
     pub fn new(def: &'static CreatureDef, fs_out: f64, initial: &[(usize, f64)]) -> Self {
+        Self::new_in(def, fs_out, crate::physics::Gas::BODY_AIR, initial)
+    }
+
+    /// The same creature breathing `gas`.
+    pub fn new_in(def: &'static CreatureDef, fs_out: f64, gas: crate::physics::Gas, initial: &[(usize, f64)]) -> Self {
         let m = js_max(1.0, js_round(def.oversample as f64 * if fs_out > 60000.0 { 0.5 } else { 1.0 })) as usize;
         let fs = fs_out * m as f64;
-        let sim = def.create(fs);
+        let sim = def.create(fs, gas);
         let ctrl_every = 64 * m;
         let mut performer = Vec::with_capacity(def.params.len());
         for (i, p) in def.params.iter().enumerate() {
