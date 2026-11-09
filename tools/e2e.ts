@@ -200,6 +200,25 @@ async function run(viewport: { width: number; height: number }, tag: string) {
     return { human: !!e?.latest, creature: !!e?.latestCreature };
   });
   logs.push(`[${tag}] back to play: ${JSON.stringify(human)}`);
+  // the air: each place rebuilds the voice in its gas; a held key must still sound in every one
+  await page.locator(".atmo-button").click();
+  await page.waitForTimeout(200);
+  await page.screenshot({ path: `${outDir}/${tag}-7-air.png` });
+  for (const place of ["Mars, Jezero crater", "Venus, surface", "Saturn, 1 bar level", "Earth, heliox at 300 m (saturation dive)", "Earth, sea level"]) {
+    await page.locator(".atmo-presets .chip", { hasText: place }).click();
+    await page.keyboard.down("d");
+    await page.waitForTimeout(700);
+    const level = await rms();
+    await page.keyboard.up("d");
+    const c = await page.locator(".atmo-read dd").first().textContent();
+    const loud = await page.locator(".atmo-read dd").nth(-2).textContent();
+    // outRms is the voice before the page's gain: Venus's dense air really is 48 dB quieter at the
+    // source (the panel's matched loudness makes up for it), so only silence or a blow-up fails
+    logs.push(`[${tag}] air ${place}: c ${c}, output ${loud}, rms ${level.toFixed(5)}`);
+    if (!(level > 1e-4 && level < 10)) errors.push(`[${tag}] voice silent or unstable in ${place} (rms ${level})`);
+    if (loud === "measuring") errors.push(`[${tag}] loudness never measured in ${place}`);
+  }
+  await page.locator(".atmo-close").click();
   await page.close();
 }
 
@@ -251,6 +270,6 @@ await run({ width: 1440, height: 980 }, "desktop");
 await run({ width: 390, height: 844 }, "mobile");
 await browser.close();
 console.log("console errors:", errors.length ? "\n" + errors.join("\n") : "none");
-console.log(logs.filter((l) => /load|rate|warn|transcription|creature|held|back to|beatbox|silence|sing|octave/i.test(l)).slice(0, 40).join("\n"));
+console.log(logs.filter((l) => /load|rate|warn|transcription|creature|held|back to|beatbox|silence|sing|octave|air/i.test(l)).slice(0, 60).join("\n"));
 // a run that collected errors fails, so CI and agents can't read it as a pass
 if (errors.length) process.exit(1);

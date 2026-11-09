@@ -2891,13 +2891,15 @@ input[type="range"]::-moz-range-thumb {
 .atmo-label {
   color: var(--text-dim);
 }
+/* fixed and centred: the top bar wraps on narrow screens, so the button can be anywhere in it */
 .atmo-panel {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 8px);
+  position: fixed;
+  left: 50%;
+  top: 64px;
+  transform: translateX(-50%);
   z-index: 50;
-  width: min(760px, 92vw);
-  max-height: 80vh;
+  width: min(760px, calc(100vw - 24px));
+  max-height: calc(100vh - 80px);
   overflow: auto;
   padding: 16px 18px;
   background: rgba(8, 11, 14, 0.96);
@@ -2970,5 +2972,11 @@ input[type="range"]::-moz-range-thumb {
 @media (max-width: 720px) {
   .atmo-cols {
     grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 600px) {
+  /* a phone's top bar has no room for the place's name: the button says Air, the panel says where */
+  .atmo-name {
+    display: none;
   }
 }

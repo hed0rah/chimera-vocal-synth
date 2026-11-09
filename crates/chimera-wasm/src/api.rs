@@ -37,6 +37,8 @@ struct State {
     next_model: usize,
     /// the page's English G2P (one dictionary, loaded once)
     g2p: EnglishG2P,
+    /// atmosphere::voice_level in Earth's air, measured on first use
+    earth_level: Option<f64>,
 }
 
 thread_local! {
@@ -73,6 +75,13 @@ fn dispatch(st: &mut State, req: &Value) -> Res {
         "atmosphere" => {
             let c = Conditions { mix: arg(req, "mix")?, pressure: arg(req, "pressure")?, temperature: arg(req, "temperature")?, airway_temperature: arg(req, "airwayTemperature")?, airway_humidity: arg(req, "airwayHumidity")? };
             Ok(airway_json(&c))
+        }
+        "atmosphereLoudness" => {
+            // renders the reference vowel (about 0.6 s of voice): call it once a change has settled
+            let c = Conditions { mix: arg(req, "mix")?, pressure: arg(req, "pressure")?, temperature: arg(req, "temperature")?, airway_temperature: arg(req, "airwayTemperature")?, airway_humidity: arg(req, "airwayHumidity")? };
+            let earth = *st.earth_level.get_or_insert_with(|| atmosphere::voice_level(Gas::BODY_AIR));
+            let l = atmosphere::loudness(&c, earth);
+            Ok(json!({ "output": l.output, "real": l.real }))
         }
         // ---------------------------------------------------------------- the anatomy model
         "model" => {

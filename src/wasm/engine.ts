@@ -297,6 +297,13 @@ export function atmosphere(c: Conditions): AirwayReport {
   return call("atmosphere", { ...c });
 }
 
+/** Loudness against Earth's sea level (amplitude ratios): the engine's output for a reference
+ * vowel, and the pressure at a listener (that times the outside density). Renders about 0.6 s of
+ * voice, so call it once a change has settled. */
+export function atmosphereLoudness(c: Conditions): { output: number; real: number } {
+  return call("atmosphereLoudness", { ...c });
+}
+
 /** Free a model (its id is invalid afterwards). */
 export function dropAirwayModel(m: AirwayModel): void {
   call("dropModel", { model: m.model });

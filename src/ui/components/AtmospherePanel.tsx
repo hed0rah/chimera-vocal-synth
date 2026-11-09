@@ -1,5 +1,5 @@
 import { ATMOSPHERES } from "../../wasm/engine.ts";
-import { LEVEL_CAP, levelRatio, useStore, type Breather } from "../store.ts";
+import { LEVEL_CAP, useStore, type Breather } from "../store.ts";
 import { Segmented, Slider, Toggle } from "./Controls.tsx";
 import { Chip } from "./Screen.tsx";
 
@@ -34,7 +34,7 @@ function AtmospherePanel() {
   const r = a.report;
   const preset = a.preset ? ATMOSPHERES.presets.find((p) => p.id === a.preset) : null;
   const total = c.mix.reduce((x, y) => x + Math.max(0, y), 0) || 1;
-  const level = levelRatio(r);
+  const l = a.loudness;
   const setMix = (i: number, v: number) => set({ mix: c.mix.map((x, j) => (j === i ? v : x)) });
   return (
     <div className="atmo-panel" data-layout="overlay" role="dialog" aria-label="Atmosphere">
@@ -109,11 +109,15 @@ function AtmospherePanel() {
             <dd>{fmt(r.outside.rho)} kg/m³</dd>
             <dt>impedance</dt>
             <dd>{fmt(r.outside.z)} rayl</dd>
-            <dt>loudness vs Earth</dt>
-            <dd>{db(level)}</dd>
+            <dt>voice's output vs Earth</dt>
+            <dd>{l ? db(l.output) : "measuring"}</dd>
+            <dt>at a listener vs Earth</dt>
+            <dd>{l ? db(l.real) : "measuring"}</dd>
           </dl>
-          <Toggle label={`Real loudness${level > LEVEL_CAP ? " (capped at +12 dB)" : ""}`} checked={a.realLevel} onChange={setReal} />
-          <p className="atmo-hint">Sound pressure at a listener scales with the density of the air it travels in. Ideal gas; within 2.5 % of real-fluid values for c at every preset.</p>
+          <Toggle label={`Real loudness${l && l.real > LEVEL_CAP ? " (capped at +12 dB)" : ""}`} checked={a.realLevel} onChange={setReal} />
+          <p className="atmo-hint">
+            Off, every place plays as loud as Earth and only the sound changes. On, you hear the pressure a listener would: the voice's airflow, measured on a reference vowel, times the density of the air it travels in. Ideal gas, within 2.5 % of real-fluid values for c at every preset.
+          </p>
         </div>
       </div>
     </div>

@@ -3,7 +3,7 @@ import { engine } from "../audio/AudioEngine.ts";
 import { DEFAULT_SOURCE, type VoiceSource } from "../wasm/engine.ts";
 import { NEUTRAL, restTip, type HumanArtic } from "../wasm/engine.ts";
 import { defaultF0, PRESETS, sameBody, type BodyMix } from "./body.ts";
-import { creatureById, ATMOSPHERES, atmosphere, type AirwayReport, type Conditions } from "../wasm/engine.ts";
+import { creatureById, ATMOSPHERES, atmosphere, atmosphereLoudness, type AirwayReport, type Conditions } from "../wasm/engine.ts";
 import type { ParamDef } from "../wasm/types.ts";
 import { BEAT_PRESETS, BASS_NOTE, beatReady, parseBeat, type BeatStep } from "../wasm/engine.ts";
 import { singNoteOn, singNoteOff, stopSinging } from "./singing.ts";
@@ -21,20 +21,24 @@ export interface AtmosphereState {
   breather: Breather;
   conditions: Conditions;
   report: AirwayReport;
-  /** scale the output by the outside air's density (sound pressure at the listener), capped */
+  /** measured loudness against Earth (null while a change settles) */
+  loudness: { output: number; real: number } | null;
+  /** true: the pressure a listener would hear (capped at +12 dB); false: every place as loud as Earth */
   realLevel: boolean;
   open: boolean;
 }
 
 const EARTH = ATMOSPHERES.presets.find((p) => p.id === "earth")!;
-const EARTH_OUTSIDE_RHO = atmosphere(EARTH.human).outside.rho;
-/** the loudest real loudness applies (+12 dB): Venus's air is 50x denser than ours */
+/** the loudest real loudness plays (+12 dB) */
 export const LEVEL_CAP = 4;
 
-/** pressure amplitude at the listener relative to Earth's sea level, uncapped */
-export function levelRatio(r: AirwayReport): number {
-  return r.outside.rho / EARTH_OUTSIDE_RHO;
+/** the output gain for a measured loudness: Earth's level (matched), or the real level, capped */
+function levelGain(l: { output: number; real: number } | null, real: boolean): number {
+  if (!l || !(l.output > 0)) return 1;
+  return real ? Math.min(LEVEL_CAP, l.real) / l.output : Math.min(1000, 1 / l.output);
 }
+
+let loudnessTimer: ReturnType<typeof setTimeout> | null = null;
 
 
 export interface BeatState {
@@ -162,9 +166,18 @@ function applyAtmosphere(conditions: Conditions, patch: Partial<AtmosphereState>
   const s = useStore.getState();
   if (s.mode === "sing") stopSinging();
   if (s.mode === "speak") stopSpeaking();
-  useStore.setState({ atmosphere: { ...s.atmosphere, ...patch, conditions, report } });
+  useStore.setState({ atmosphere: { ...s.atmosphere, ...patch, conditions, report, loudness: null } });
   engine.setGas(report.gas);
-  if (s.atmosphere.realLevel) engine.setLevel(Math.min(LEVEL_CAP, levelRatio(report)));
+  // the loudness renders a reference vowel: measure once the change has settled, keep the old gain till then
+  if (loudnessTimer) clearTimeout(loudnessTimer);
+  loudnessTimer = setTimeout(() => {
+    loudnessTimer = null;
+    const now = useStore.getState().atmosphere;
+    if (now.conditions !== conditions) return;
+    const loudness = atmosphereLoudness(conditions);
+    useStore.setState({ atmosphere: { ...now, loudness } });
+    engine.setLevel(levelGain(loudness, now.realLevel));
+  }, 250);
 }
 
 export const useStore = create<State>((set, get) => ({
@@ -225,7 +238,7 @@ export const useStore = create<State>((set, get) => ({
     updateGate(get());
   },
   creature: "songbird",
-  atmosphere: { preset: "earth", breather: "human", conditions: EARTH.human, report: atmosphere(EARTH.human), realLevel: false, open: false },
+  atmosphere: { preset: "earth", breather: "human", conditions: EARTH.human, report: atmosphere(EARTH.human), loudness: { output: 1, real: 1 }, realLevel: false, open: false },
   loadAtmosphere: (id, breather) => {
     const p = ATMOSPHERES.presets.find((x) => x.id === id);
     if (!p) return;
@@ -235,7 +248,7 @@ export const useStore = create<State>((set, get) => ({
   setConditions: (v) => applyAtmosphere({ ...get().atmosphere.conditions, ...v }, { preset: null }),
   setRealLevel: (on) => {
     set((s) => ({ atmosphere: { ...s.atmosphere, realLevel: on } }));
-    engine.setLevel(on ? Math.min(LEVEL_CAP, levelRatio(get().atmosphere.report)) : 1);
+    engine.setLevel(levelGain(get().atmosphere.loudness, on));
   },
   setAtmosphereOpen: (open) => set((s) => ({ atmosphere: { ...s.atmosphere, open } })),
   cparams: {},
@@ -321,7 +334,7 @@ export const useStore = create<State>((set, get) => ({
         engine.setVolume(s.volume);
         if (!sameBody(s.body, PRESETS.male)) engine.setBody(s.body);
         if (s.atmosphere.preset !== "earth" || s.atmosphere.breather !== "human") engine.setGas(s.atmosphere.report.gas);
-        if (s.atmosphere.realLevel) engine.setLevel(Math.min(LEVEL_CAP, levelRatio(s.atmosphere.report)));
+        engine.setLevel(levelGain(s.atmosphere.loudness, s.atmosphere.realLevel));
         engine.setSource(s.source);
         engine.setArtic(s.artic, s.tipFree);
         if (s.mode === "bestiary") engine.setCreature(s.creature, s.cparams[s.creature]);

@@ -320,6 +320,38 @@ pub const PRESETS: &[Preset] = &[
     Preset { id: "sf6_breath", name: "Earth, a breath of SF6", mix: mix(0.156, 0.042, 0.002, 0.0, 0.0, 0.0, 0.0, 0.0, 0.8), pressure: ATM, temperature: 293.15, source: "MODELLED: about 80 % SF6 left in the airway after one breath" },
 ];
 
+/// RMS of the engine's output for a sustained neutral vowel (the default male voice at its default
+/// pitch and breath, 48 kHz, 0.25 to 0.6 s after the breath starts) with every airway in `gas`. The
+/// output is the radiated flow's derivative, so this measures what the source and tract do in the
+/// gas; the pressure at a listener is that times the outside air's density.
+pub fn voice_level(gas: Gas) -> f64 {
+    let mut e = crate::engine::Engine::new(48000.0);
+    e.set_gas(gas);
+    e.set_gate(1.0);
+    let mut out = vec![0.0f32; 28800];
+    e.render(&mut out);
+    let tail = &out[12000..];
+    sqrt(tail.iter().map(|x| (*x as f64) * (*x as f64)).sum::<f64>() / tail.len() as f64)
+}
+
+/// How loud a voice is in these conditions against Earth's sea level (amplitude ratios).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Loudness {
+    /// the engine's output against the same voice in `Gas::BODY_AIR` (source and tract only)
+    pub output: f64,
+    /// pressure at a listener: `output` times the outside air's density against Earth's
+    pub real: f64,
+}
+
+/// Loudness of `c` against Earth; `earth_level` is [`voice_level`] of `Gas::BODY_AIR` (pass it in
+/// to measure it once).
+pub fn loudness(c: &Conditions, earth_level: f64) -> Loudness {
+    let a = c.airway();
+    let output = voice_level(a.gas) / earth_level;
+    let earth_out = Conditions::EARTH.airway().outside.rho;
+    Loudness { output, real: output * a.outside.rho / earth_out }
+}
+
 pub fn preset(id: &str) -> Option<&'static Preset> {
     PRESETS.iter().find(|p| p.id == id)
 }
