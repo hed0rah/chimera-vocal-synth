@@ -48,6 +48,11 @@ model's small errors cancel and `Conditions::EARTH` gives `Gas::BODY_AIR` exactl
   cold Titan are the least ideal); mu within 10 %, 25 % for hydrogen below 150 K.
 - Helium speech: in 80/20 heliox F3 rises with c (within 6 %) and F1 rises least, as measured in divers
   (Fant and Lindqvist 1968): the walls give the closed tract a resonance of its own.
+- Compressed air: the walls' closed-tract resonance adds in quadrature to every formant and grows with
+  density, so at 2 and 11 bar every formant gains the same F^2 (within 15 %), the gain at 11 bar is ten
+  times the gain at 2, and F1 moves most (Fant and Sonesson 1964). It is why a human on Venus's surface
+  (CO2 at 92 bar, warmed to 37 °C: 137 times air's density) has F1 near 2.2 kHz although c in the airway
+  is Mars's, and why F1 in a deep heliox dive sits higher than c alone would put it.
 - Every preset renders a finite, audible human voice, and every creature a finite call, in every preset.
 
 ## Loudness

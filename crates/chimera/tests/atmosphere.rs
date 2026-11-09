@@ -141,3 +141,26 @@ fn every_creature_is_stable_in_every_preset() {
         }
     }
 }
+
+/// Speech in compressed air: c does not change with pressure, but the denser gas stiffens against the
+/// yielding walls and raises their closed-tract resonance F_w, which adds in quadrature to every formant,
+/// F^2 = F_rigid^2 + F_w^2, with F_w^2 proportional to the density (Fant and Sonesson 1964, STL-QPSR 5(2);
+/// Fant and Lindqvist 1968). So F1 moves most, every formant gains about the same F^2, and that gain grows
+/// in proportion to the pressure added.
+#[test]
+fn in_compressed_air_the_walls_add_the_same_f_squared_to_every_formant() {
+    let at = |bar: f64| formants(Conditions { pressure: bar * atmosphere::ATM, airway_humidity: 0.0, ..Conditions::EARTH }.gas());
+    let (one, two, eleven) = (at(1.0), at(2.0), at(11.0));
+    assert!(one.len() >= 3 && two.len() >= 3 && eleven.len() >= 3);
+    let gain = |x: &[f64]| -> Vec<f64> { (0..3).map(|k| x[k] * x[k] - one[k] * one[k]).collect() };
+    let (g2, g11) = (gain(&two), gain(&eleven));
+    let mean = |g: &[f64]| g.iter().sum::<f64>() / g.len() as f64;
+    for g in [&g2, &g11] {
+        for k in 0..3 {
+            assert!(close(g[k], mean(g), 0.15), "F{} gains {} of F^2, the mean is {}: {g:?}", k + 1, g[k], mean(g));
+        }
+    }
+    // 10 bar added against 1: ten times the gain
+    assert!(close(mean(&g11) / mean(&g2), 10.0, 0.1), "gain ratio {}", mean(&g11) / mean(&g2));
+    assert!(eleven[0] / one[0] > 1.5 && eleven[2] / one[2] < 1.1, "F1 moves most: {one:?} -> {eleven:?}");
+}
