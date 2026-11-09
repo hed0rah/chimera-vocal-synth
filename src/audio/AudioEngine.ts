@@ -35,6 +35,10 @@ export class AudioEngine {
   private pendingTipFree: boolean | undefined;
   private pendingSource: Partial<VoiceSource> | null = null;
   private pendingCParams: Record<string, number> | null = null;
+  private pendingGas: { rho: number; c: number; mu: number } | null = null;
+  private volume = 1;
+  /** the atmosphere's loudness factor (1 unless real loudness is on) */
+  private level = 1;
   private flushScheduled = false;
   private readyListeners = new Set<() => void>();
   private plannedListeners = new Set<(p: PlannedMessage) => void>();
@@ -210,7 +214,20 @@ export class AudioEngine {
   }
 
   setVolume(v: number): void {
-    if (this.master && this.ctx) this.master.gain.setTargetAtTime(v, this.ctx.currentTime, 0.02);
+    this.volume = v;
+    if (this.master && this.ctx) this.master.gain.setTargetAtTime(this.volume * this.level, this.ctx.currentTime, 0.02);
+  }
+
+  /** Loudness factor of the atmosphere (sound pressure scales with the outside air's density). */
+  setLevel(g: number): void {
+    this.level = g;
+    this.setVolume(this.volume);
+  }
+
+  /** Coalesced: a dragged condition rebuilds the voice at most once per frame. */
+  setGas(gas: { rho: number; c: number; mu: number }): void {
+    this.pendingGas = gas;
+    this.scheduleFlush();
   }
 
   setBody(body: BodyMix): void {
@@ -250,6 +267,10 @@ export class AudioEngine {
       if (this.pendingCParams) {
         this.send({ type: "cparams", values: this.pendingCParams });
         this.pendingCParams = null;
+      }
+      if (this.pendingGas) {
+        this.send({ type: "gas", gas: this.pendingGas });
+        this.pendingGas = null;
       }
     };
     if (typeof requestAnimationFrame === "function") requestAnimationFrame(flush);

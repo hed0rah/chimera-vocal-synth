@@ -20,6 +20,7 @@ import { playDemo, DEMO_SONGS } from "./singing.ts";
 import type { Mode } from "./store.ts";
 import type { BodyName } from "../worklet/protocol.ts";
 import { BodyPad } from "./components/BodyPad.tsx";
+import { AtmosphereButton } from "./components/AtmospherePanel.tsx";
 import { bodyLabel, presetOf, PRESETS } from "./body.ts";
 
 // three.js only loads when the 3D view is first shown
@@ -82,6 +83,7 @@ function TopBar() {
         </div>
       )}
       <div className="topbar-right">
+        <AtmosphereButton />
         <label className="volume">
           <span>Volume</span>
           <input type="range" min={0} max={1} step={0.01} value={volume} onChange={(e) => setVolume(Number(e.target.value))} style={{ "--pos": `${volume * 100}%` } as React.CSSProperties} />

@@ -16,6 +16,8 @@ export type BodyName = "male" | "female" | "child";
 
 export type ToWorklet =
   | { type: "body"; body: BodyMix }
+  /** fill the airways with this gas (CGS), from the main thread's atmosphere model */
+  | { type: "gas"; gas: { rho: number; c: number; mu: number } }
   | { type: "artic"; values: Partial<HumanArtic>; tipFree?: boolean }
   | { type: "source"; values: Partial<VoiceSource> }
   | { type: "gate"; level: number }

@@ -2865,3 +2865,110 @@ input[type="range"]::-moz-range-thumb {
     padding: 7px 8px 0;
   }
 }
+
+/* ---------------------------------------------------------------- atmosphere */
+.atmo {
+  position: relative;
+}
+.atmo-button {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-s);
+  color: var(--text);
+  padding: 5px 10px;
+  font: inherit;
+  font-stretch: 87%;
+  font-size: 13px;
+  cursor: pointer;
+}
+.atmo-button.on,
+.atmo-button:hover {
+  border-color: var(--blue);
+}
+.atmo-label {
+  color: var(--text-dim);
+}
+.atmo-panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  z-index: 50;
+  width: min(760px, 92vw);
+  max-height: 80vh;
+  overflow: auto;
+  padding: 16px 18px;
+  background: rgba(8, 11, 14, 0.96);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m);
+  font-size: 13px;
+  line-height: 1.35;
+}
+.atmo-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.atmo-head h2 {
+  margin: 0;
+  font-size: 14px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.atmo-close {
+  margin-left: auto;
+  background: none;
+  border: 0;
+  color: var(--text-dim);
+  font-size: 20px;
+  cursor: pointer;
+}
+.atmo-hint,
+.atmo-source {
+  color: var(--text-dim);
+  margin: 8px 0;
+}
+.atmo-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 10px 0 4px;
+}
+.atmo-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 22px;
+  margin-top: 10px;
+}
+.atmo-col h3 {
+  margin: 10px 0 6px;
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.atmo-read {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
+  margin: 0 0 8px;
+}
+.atmo-read dt {
+  color: var(--text-dim);
+}
+.atmo-read dd {
+  margin: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.atmo-warn {
+  color: var(--red);
+  margin: 6px 0;
+}
+@media (max-width: 720px) {
+  .atmo-cols {
+    grid-template-columns: 1fr;
+  }
+}

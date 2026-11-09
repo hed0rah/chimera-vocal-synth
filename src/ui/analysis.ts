@@ -3,7 +3,7 @@
  * engine): geometry frames for drawing, the transfer function and formants for display, and
  * vowel-space interpolation for the vowel map. Never runs inside the audio thread.
  */
-import { airwayModel, dropAirwayModel, airwayFrame, airwayAreas, airwayTransfer, TractMap, NEUTRAL, ARTIC_KEYS, VOWELS, VOWEL_TARGETS, type AirwayModel, type HumanArtic, type HumanBody, type HumanFrame } from "../wasm/engine.ts";
+import { airwayModel, dropAirwayModel, airwayFrame, airwayAreas, airwayTransfer, TractMap, NEUTRAL, ARTIC_KEYS, VOWELS, VOWEL_TARGETS, type AirwayModel, type HumanArtic, type HumanBody, type HumanFrame, type Gas } from "../wasm/engine.ts";
 import { bodyWeights, type BodyMix } from "./body.ts";
 
 export interface VowelPoint {
@@ -29,9 +29,9 @@ export class VoiceModel {
   private tfKey = "";
   private tf: { freqs: number[]; db: number[]; formants: number[] } | null = null;
 
-  constructor(body: BodyMix, sampleRate: number) {
+  constructor(body: BodyMix, sampleRate: number, gas?: Gas) {
     this.body = body;
-    this.model = airwayModel(body, sampleRate);
+    this.model = airwayModel(body, sampleRate, gas);
     this.bodyParams = this.model.body;
     this.tract = new TractMap(this.bodyParams);
     this.nPh = this.model.nPh;

@@ -230,8 +230,71 @@ export interface AirwayModel {
   glottisPort: number;
 }
 
-export function airwayModel(body: BodyMix, sampleRate: number): AirwayModel {
-  return call("model", { body, sampleRate });
+export function airwayModel(body: BodyMix, sampleRate: number, gas?: Gas): AirwayModel {
+  return call("model", { body, sampleRate, gas: gas ?? null });
+}
+
+// ------------------------------------------------------------------ atmospheres
+
+/** The gas in an airway, in the engine's CGS units (g/cm³, cm/s, poise). */
+export interface Gas {
+  rho: number;
+  c: number;
+  mu: number;
+}
+
+/** Where a voice is: the outside mix (mole fractions, in ATMOSPHERES.species order), pressure (Pa),
+ * temperature (K), and the temperature (K) and relative humidity (0..1) the airway brings it to. */
+export interface Conditions {
+  mix: number[];
+  pressure: number;
+  temperature: number;
+  airwayTemperature: number;
+  airwayHumidity: number;
+}
+
+/** An ideal-gas state, SI: m/s, kg/m³, Pa s, m²/s, kg/mol, rayl, K, Pa. */
+export interface GasState {
+  c: number;
+  rho: number;
+  mu: number;
+  nu: number;
+  gamma: number;
+  molarMass: number;
+  z: number;
+  temperature: number;
+  pressure: number;
+}
+
+export interface AirwayReport {
+  gas: Gas;
+  airway: GasState;
+  outside: GasState;
+  /** water vapour's mole fraction in the airway */
+  water: number;
+  /** under the water's saturation pressure at the airway's temperature: it would boil */
+  boiling: boolean;
+  /** the factor the resonances move by, and in semitones */
+  cRatio: number;
+  semitones: number;
+  rhoRatio: number;
+}
+
+export interface AtmospherePreset {
+  id: string;
+  name: string;
+  mix: number[];
+  pressure: number;
+  temperature: number;
+  source: string;
+  human: Conditions;
+  native: Conditions;
+}
+
+export const ATMOSPHERES: { species: { formula: string; name: string; molarMass: number }[]; presets: AtmospherePreset[]; bodyTemperature: number } = call("atmospheres");
+
+export function atmosphere(c: Conditions): AirwayReport {
+  return call("atmosphere", { ...c });
 }
 
 /** Free a model (its id is invalid afterwards). */

@@ -109,6 +109,10 @@ class ChimeraProcessor extends AudioWorkletProcessor {
         x.engine_set_body(h, m.body.female, m.body.child);
         this.postReady();
         break;
+      case "gas":
+        x.engine_set_gas(h, m.gas.rho, m.gas.c, m.gas.mu);
+        this.postReady();
+        break;
       case "artic": {
         const v = this.values();
         for (const [k, val] of Object.entries(m.values)) {
