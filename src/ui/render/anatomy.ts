@@ -59,6 +59,20 @@ export interface ViewFlags {
   calipers: boolean;
 }
 
+/** the gas the airway breathes, as the view draws it: molecules as many as its density, as quick as its sound */
+export interface GasVis {
+  /** speed of sound against warm air (the factor the resonances move by) */
+  speed: number;
+  /** density against warm air */
+  density: number;
+  color: string;
+}
+
+interface Molecule {
+  s: number;
+  u: number;
+}
+
 interface Particle {
   s: number;
   u: number; // lateral position −1..1
@@ -139,6 +153,7 @@ export function puffProfile(f: HumanFrame, k: number, puff: number): ((p: Vec) =
 
 export class AnatomyRenderer {
   private particles: Particle[] = [];
+  private molecules: Molecule[] = [];
   private scale = 20;
   private ox = 0;
   private oy = 0;
@@ -239,7 +254,7 @@ export class AnatomyRenderer {
     a: HumanArtic,
     tele: TelemetryMessage | null,
     view: ViewFlags,
-    opts: { hover: HandleId | null; drag: HandleId | null; dt: number; formants: number[]; slots: Slot[]; info: string[] },
+    opts: { hover: HandleId | null; drag: HandleId | null; dt: number; formants: number[]; slots: Slot[]; info: string[]; gas?: GasVis | null },
   ): void {
     this.clock += opts.dt;
     const G = this.geometry(model, f, a);
@@ -273,6 +288,7 @@ export class AnatomyRenderer {
     if (view.pressure && tele) this.drawPressure(ctx, model, f, tele);
     else if (view.grid) for (const gs of f.grid) seg(ctx, this.X(gs.inner), this.Y(gs.inner), this.X(gs.outer), this.Y(gs.outer), V.blueDim, 0.9, { alpha: 0.7 });
     if (view.particles && tele) this.drawParticles(ctx, model, f, tele, opts.dt);
+    if (opts.gas) this.drawGas(ctx, f, opts.gas, opts.dt);
 
     // afterglow: where the tongue, jaw and lips were a moment ago
     if (tele && this.clock - this.lastEcho >= 0.028) {
@@ -425,6 +441,30 @@ export class AnatomyRenderer {
       p.py = y;
     }
     path.forEach((pa, i) => beam(ctx, pa, "#ffe2a8", 1.1, { alpha: 0.16 + 0.2 * i }));
+  }
+
+  /**
+   * The breathed gas as molecules in the airway: their number follows its density (square root, so SF6 is a crowd
+   * and helium a sparse shimmer, not a vacuum), their jitter its molecular speed, which goes as its speed of sound.
+   */
+  private drawGas(ctx: CanvasRenderingContext2D, f: HumanFrame, gas: GasVis, dt: number): void {
+    const want = Math.max(14, Math.min(320, Math.round(70 * Math.sqrt(gas.density))));
+    while (this.molecules.length < want) this.molecules.push({ s: Math.random() * f.lipS, u: Math.random() * 2 - 1 });
+    this.molecules.length = want;
+    const step = 2.4 * gas.speed * dt; // cm of wander per frame, quicker in a faster gas
+    ctx.save();
+    ctx.fillStyle = gas.color;
+    ctx.globalAlpha = 0.75;
+    for (const m of this.molecules) {
+      m.s += (Math.random() - 0.5) * step * 4;
+      m.u += (Math.random() - 0.5) * step * 0.6;
+      if (m.s < 0 || m.s > f.lipS) m.s = Math.random() * f.lipS;
+      if (m.u < -1 || m.u > 1) m.u = Math.random() * 2 - 1;
+      const pos = this.gridPoint(f, m.s, m.u * 0.85);
+      if (!pos) continue;
+      ctx.fillRect(this.X(pos) - 1.1, this.Y(pos) - 1.1, 2.2, 2.2);
+    }
+    ctx.restore();
   }
 
   private drawTurbulence(ctx: CanvasRenderingContext2D, model: VoiceModel, f: HumanFrame, tele: TelemetryMessage): void {

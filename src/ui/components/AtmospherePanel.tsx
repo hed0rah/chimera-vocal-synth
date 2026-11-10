@@ -13,8 +13,18 @@ export function AtmosphereButton() {
   const a = useStore((s) => s.atmosphere);
   const setOpen = useStore((s) => s.setAtmosphereOpen);
   const name = a.preset ? ATMOSPHERES.presets.find((p) => p.id === a.preset)?.name : "Custom air";
+  const load = useStore((s) => s.loadAtmosphere);
+  const breathe: [string, string][] = [["earth", "Air"], ["helium_breath", "Helium"], ["sf6_breath", "SF6"]];
   return (
     <div className="atmo">
+      <div className="atmo-breathe" role="group" aria-label="Breathe">
+        <span className="atmo-label">Breathe</span>
+        {breathe.map(([id, label]) => (
+          <button key={id} className={`atmo-quick${a.preset === id && a.breather === "human" ? " on" : ""}`} onClick={() => load(id, "human")}>
+            {label}
+          </button>
+        ))}
+      </div>
       <button className={`atmo-button${a.open ? " on" : ""}`} aria-expanded={a.open} onClick={() => setOpen(!a.open)} title="The air the voice breathes and speaks into">
         <span className="atmo-label">Air</span>
         <span className="atmo-name">{name}</span>

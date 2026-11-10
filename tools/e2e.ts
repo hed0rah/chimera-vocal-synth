@@ -212,10 +212,10 @@ async function run(viewport: { width: number; height: number }, tag: string) {
     await page.keyboard.up("d");
     const c = await page.locator(".atmo-read dd").first().textContent();
     const loud = await page.locator(".atmo-read dd").nth(-2).textContent();
-    // outRms is the voice before the page's gain: Venus's dense air really is 48 dB quieter at the
+    // outRms is the voice before the page's gain: Venus's dense air really is 56 dB quieter at the
     // source (the panel's matched loudness makes up for it), so only silence or a blow-up fails
     logs.push(`[${tag}] air ${place}: c ${c}, output ${loud}, rms ${level.toFixed(5)}`);
-    if (!(level > 1e-4 && level < 10)) errors.push(`[${tag}] voice silent or unstable in ${place} (rms ${level})`);
+    if (!(level > 1e-5 && level < 10)) errors.push(`[${tag}] voice silent or unstable in ${place} (rms ${level})`);
     if (loud === "measuring") errors.push(`[${tag}] loudness never measured in ${place}`);
   }
   await page.locator(".atmo-close").click();

@@ -2869,6 +2869,32 @@ input[type="range"]::-moz-range-thumb {
 /* ---------------------------------------------------------------- atmosphere */
 .atmo {
   position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.atmo-breathe {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-stretch: 87%;
+  font-size: 13px;
+}
+.atmo-breathe .atmo-label {
+  margin-right: 4px;
+}
+.atmo-quick {
+  background: none;
+  border: 1px solid var(--line);
+  color: var(--text);
+  font: inherit;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+.atmo-quick.on,
+.atmo-quick:hover {
+  border-color: var(--blue);
+  color: var(--white);
 }
 .atmo-button {
   display: flex;
@@ -2976,7 +3002,9 @@ input[type="range"]::-moz-range-thumb {
 }
 @media (max-width: 600px) {
   /* a phone's top bar has no room for the place's name: the button says Air, the panel says where */
-  .atmo-name {
+  /* and no room for the quick Breathe buttons: the Air panel has the same gases */
+  .atmo-name,
+  .atmo-breathe {
     display: none;
   }
 }

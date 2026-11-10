@@ -7,6 +7,7 @@ import { useStore } from "../store.ts";
 import { VoiceModel } from "../analysis.ts";
 import { useModel } from "../useModel.ts";
 import { V } from "../colors.ts";
+import { ATMOSPHERES } from "../../wasm/engine.ts";
 import type { HumanArtic, HumanFrame } from "../../wasm/types.ts";
 import type { TelemetryMessage } from "../../worklet/protocol.ts";
 
@@ -102,12 +103,20 @@ export function AnatomyView(props: { slots?: SlotsFn; info?: InfoFn; showFormant
         const f = m.frame(a);
         if (++fTick % 4 === 0 || formants.length === 0) formants = m.transfer(a).formants;
         const info = infoRef.current(m, f, tele);
+        const at = st.atmosphere;
+        const breathing = !(at.preset === "earth" && at.breather === "human");
+        if (breathing) {
+          const short: Record<string, string> = { helium_breath: "helium", sf6_breath: "SF6", heliox_dive: "heliox, 31 bar" };
+          const name = at.preset ? (short[at.preset] ?? ATMOSPHERES.presets.find((p) => p.id === at.preset)?.name ?? "custom air") : "custom air";
+          info.push(`breathing ${name}`, `sound ${Math.round(at.report.airway.c)} m/s, resonances x${at.report.cRatio.toFixed(2)}`);
+        }
+        const gas = breathing ? { speed: at.report.cRatio, density: at.report.rhoRatio, color: at.report.cRatio > 1.3 ? "#a8f0ff" : at.report.cRatio < 0.75 ? "#c49bff" : "#ffe2a8" } : null;
         ctx.setTransform(1, 0, 0, 1, 0, 0);
         ctx.globalCompositeOperation = "source-over";
         ctx.fillStyle = "#000";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        r.draw(ctx, m, f, a, tele, st.view, { hover: hoverRef.current, drag: dragRef.current?.id ?? null, dt, formants: formantsRef.current ? formants : [], slots: slotsRef.current(m, a, f, formants, tele), info: info.map((s) => s.toUpperCase()) });
+        r.draw(ctx, m, f, a, tele, st.view, { hover: hoverRef.current, drag: dragRef.current?.id ?? null, dt, formants: formantsRef.current ? formants : [], slots: slotsRef.current(m, a, f, formants, tele), info: info.map((s) => s.toUpperCase()), gas });
         overlayRef.current?.(ctx, r, m, f, a, { w, h, dt });
         glow.apply(canvas, ctx, dpr);
       }
