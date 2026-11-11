@@ -210,16 +210,11 @@ pub fn oversample_for(fs_out: f64) -> usize {
 /// The airway a voice at `fs_out` builds in `gas`, and its oversampling factor: `oversample`,
 /// raised while the airway's Courant number is over [`crate::physics::MAX_CFL`]. The tubes keep
 /// a minimum number of sections, so in a fast gas (helium, hydrogen) the sections are shorter
-/// than the leapfrog allows at the usual rate. Air never raises it. The page's mirror of the
-/// voice builds through here too, so both have the same node counts.
+/// than the leapfrog allows at the usual rate. In air, at 44.1 kHz and above, it never raises
+/// `oversample` (the golden fixtures stand); below, the child body's piriform fossa needs it.
+/// The page's mirror of the voice builds through here too, so both have the same node counts.
 pub fn airway_for(fs_out: f64, body: HumanBody, oversample: usize, gas: crate::physics::Gas) -> (usize, HumanAirway) {
-    let mut m = oversample;
-    let mut airway = HumanAirway::new_in(fs_out * m as f64, body, gas);
-    while airway.net.check_cfl() > crate::physics::MAX_CFL && m < 16 {
-        m += 1;
-        airway = HumanAirway::new_in(fs_out * m as f64, body, gas);
-    }
-    (m, airway)
+    crate::physics::stable_oversample(fs_out, oversample, |m| HumanAirway::new_in(fs_out * m as f64, body, gas), |a| Some(a.net.check_cfl()))
 }
 
 impl HumanVoice {

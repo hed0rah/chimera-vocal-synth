@@ -147,7 +147,12 @@ impl Engine {
     /// Fill every airway with `gas`: the human voice is rebuilt as a body switch rebuilds it
     /// (the performer's settings carry over) and a playing creature is rebuilt with its
     /// performer's settings. Allocates (new airway networks).
+    /// Rebuilds the voice (allocates, as [`Engine::set_body`] does). A gas that is not
+    /// [`Gas::is_physical`], or the one already breathed, changes nothing.
     pub fn set_gas(&mut self, gas: Gas) -> VoiceInfo {
+        if !gas.is_physical() || gas == self.gas {
+            return self.info();
+        }
         self.gas = gas;
         if let Some(c) = self.creature.as_ref() {
             let def = c.def;

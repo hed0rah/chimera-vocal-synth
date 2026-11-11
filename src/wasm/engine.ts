@@ -253,7 +253,7 @@ export interface Conditions {
   airwayHumidity: number;
 }
 
-/** An ideal-gas state, SI: m/s, kg/m³, Pa s, m²/s, kg/mol, rayl, K, Pa. */
+/** A gas state (Peng-Robinson), SI: m/s, kg/m³, Pa s, m²/s, kg/mol, rayl, K, Pa. */
 export interface GasState {
   c: number;
   rho: number;

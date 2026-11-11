@@ -2,17 +2,18 @@
 //!
 //! The controls are the conditions themselves: a mix of gases (mole fractions), the pressure,
 //! the temperature of the air, and the temperature and humidity it reaches inside the airway. From
-//! those, for an ideal gas:
+//! those:
 //!
-//! - speed of sound c = sqrt(gamma R T / M), with gamma from each species' heat capacity at T
-//!   (translation and rotation, harmonic vibrational modes, and hydrogen's quantised rotation);
-//! - density rho = P M / (R T);
-//! - viscosity mu from Sutherland's law per species, mixed by Wilke's rule.
+//! - each species' ideal-gas heat capacity at T (translation and rotation, harmonic vibrational
+//!   modes, and hydrogen's quantised rotation);
+//! - density and the speed of sound from the Peng-Robinson equation of state (an ideal gas at low
+//!   density, a dense fluid near a critical point), with its departure of cv;
+//! - viscosity mu from Sutherland's law per species, mixed by Wilke's rule (the dilute gas's).
 //!
 //! The airway was tuned in [`Gas::BODY_AIR`]. A condition is applied as a ratio to the same model's
 //! own warm, saturated air ([`reference`]), so the model's small errors cancel and the reference
-//! conditions give `BODY_AIR` exactly. Against real-fluid values (CoolProp) at ten planetary
-//! sites, the ideal model is within 2.5 % on c and 4 % on rho; see `tests/atmosphere.rs`.
+//! conditions give `BODY_AIR` exactly. Against real-fluid values (CoolProp) at nine planetary
+//! sites, the model is within 2.5 % on c and 4 % on rho; see `tests/atmosphere.rs`.
 //!
 //! Units here are SI (K, Pa, kg/m³, m/s, Pa·s); [`Conditions::gas`] converts to the engine's CGS.
 
@@ -132,7 +133,7 @@ pub fn water_saturation(t: f64) -> f64 {
     611.21 * exp((18.678 - c / 234.5) * (c / (257.14 + c)))
 }
 
-/// The state of an ideal gas mix.
+/// The state of a gas mix.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct GasState {
     /// kg/mol
@@ -245,7 +246,6 @@ pub fn state(mix: &Mix, t: f64, p: f64) -> GasState {
         m += x(i) * SPECIES[i].molar_mass;
         cp += x(i) * cp_over_r(&SPECIES[i], t);
     }
-    let gamma = cp / (cp - 1.0);
     // Wilke's mixing rule
     let mut mus = [0.0; N_SPECIES];
     for i in 0..N_SPECIES {
@@ -267,7 +267,6 @@ pub fn state(mix: &Mix, t: f64, p: f64) -> GasState {
         }
         mu += (x(i) * mus[i]) / den;
     }
-    let _ = gamma;
     let mut xs = [0.0; N_SPECIES];
     for (i, v) in xs.iter_mut().enumerate() {
         *v = x(i);
@@ -413,7 +412,8 @@ pub const PRESETS: &[Preset] = &[
 ];
 
 /// RMS of the engine's output for a sustained neutral vowel (the default male voice at its default
-/// pitch and breath, 48 kHz, 0.25 to 0.6 s after the breath starts) with every airway in `gas`. The
+/// pitch and breath, 48 kHz, 0.25 to 0.6 s after the breath starts: past the onset, long enough
+/// for a few hundred periods) with every airway in `gas`. The
 /// output is the radiated flow's derivative, so this measures what the source and tract do in the
 /// gas; the pressure at a listener is that times the outside air's density.
 pub fn voice_level(gas: Gas) -> f64 {

@@ -129,7 +129,7 @@ function AtmospherePanel() {
           </dl>
           <Toggle label={`Real loudness${l && l.real > LEVEL_CAP ? " (capped at +12 dB)" : ""}`} checked={a.realLevel} onChange={setReal} />
           <p className="atmo-hint">
-            Off, every place plays as loud as Earth and only the sound changes. On, you hear the pressure a listener would: the voice's airflow, measured on a reference vowel, times the density of the air it travels in. Real gas (Peng-Robinson): within 1 % of reference values at every preset's outside conditions.
+            Off, every place plays as loud as Earth and only the sound changes. On, you hear the pressure a listener would: the voice's airflow, measured on a reference vowel, times the density of the air it travels in. Real gas (Peng-Robinson): within 2.5 % on sound speed and 4 % on density of reference values (CoolProp) at every preset's outside conditions.
           </p>
         </div>
       </div>

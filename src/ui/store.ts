@@ -32,10 +32,13 @@ const EARTH = ATMOSPHERES.presets.find((p) => p.id === "earth")!;
 /** the loudest real loudness plays (+12 dB) */
 export const LEVEL_CAP = 4;
 
+/** the most a matched level makes up (+60 dB): a bound for a near-silent gas; Venus's surface needs 650x */
+const MATCH_CAP = 1000;
+
 /** the output gain for a measured loudness: Earth's level (matched), or the real level, capped */
 function levelGain(l: { output: number; real: number } | null, real: boolean): number {
   if (!l || !(l.output > 0)) return 1;
-  return real ? Math.min(LEVEL_CAP, l.real) / l.output : Math.min(1000, 1 / l.output);
+  return real ? Math.min(LEVEL_CAP, l.real) / l.output : Math.min(MATCH_CAP, 1 / l.output);
 }
 
 let loudnessTimer: ReturnType<typeof setTimeout> | null = null;
@@ -163,12 +166,18 @@ const FIRST_BEAT = BEAT_PRESETS[0];
  * loudness follows if real loudness is on. A note or a phrase does not carry over the rebuild. */
 function applyAtmosphere(conditions: Conditions, patch: Partial<AtmosphereState>): void {
   const report = atmosphere(conditions);
+  // an empty mix has no state (its sound speed is NaN, null in JSON): the change is refused and
+  // the slider stays where it was, as the engine would refuse the gas
+  const g = report.gas;
+  if (![g.rho, g.c, g.mu].every((x) => typeof x === "number" && Number.isFinite(x) && x > 0)) return;
   const s = useStore.getState();
   if (s.mode === "sing") stopSinging();
   if (s.mode === "speak") stopSpeaking();
   useStore.setState({ atmosphere: { ...s.atmosphere, ...patch, conditions, report, loudness: null } });
+  // the loudness renders a reference vowel: measure once the change has settled; till then no gain
+  // above 1, which only a quieter gas than the new one could need (1/output is up to 650x on Venus)
+  engine.holdLevel();
   engine.setGas(report.gas);
-  // the loudness renders a reference vowel: measure once the change has settled, keep the old gain till then
   if (loudnessTimer) clearTimeout(loudnessTimer);
   loudnessTimer = setTimeout(() => {
     loudnessTimer = null;
@@ -177,7 +186,7 @@ function applyAtmosphere(conditions: Conditions, patch: Partial<AtmosphereState>
     const loudness = atmosphereLoudness(conditions);
     useStore.setState({ atmosphere: { ...now, loudness } });
     engine.setLevel(levelGain(loudness, now.realLevel));
-  }, 250);
+  }, 250); // after a slider drag stops: the measurement renders 0.6 s of voice on this thread (about 200 ms)
 }
 
 export const useStore = create<State>((set, get) => ({

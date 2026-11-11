@@ -89,6 +89,9 @@ fn dispatch(st: &mut State, req: &Value) -> Res {
             let body: BodyMix = arg(req, "body")?;
             let fs: f64 = arg(req, "sampleRate")?;
             let gas: Gas = if req.get("gas").is_some_and(|g| !g.is_null()) { arg(req, "gas")? } else { Gas::BODY_AIR };
+            if !gas.is_physical() {
+                return Err(format!("model: not a physical gas: {gas:?}"));
+            }
             let i = match st.models.iter().position(|x| x.body == body && x.fs == fs && x.gas == gas) {
                 Some(i) => i,
                 None => {

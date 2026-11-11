@@ -204,8 +204,18 @@ async function run(viewport: { width: number; height: number }, tag: string) {
   await page.locator(".atmo-button").click();
   await page.waitForTimeout(200);
   await page.screenshot({ path: `${outDir}/${tag}-7-air.png` });
+  // the page's gain: a quiet gas's make-up (Venus 650x) must not carry into the next gas before it is measured
+  const gain = () =>
+    page.evaluate((): number => {
+      // @ts-expect-error debug handle
+      return window.__chimeraEngine?.level ?? -1;
+    });
   for (const place of ["Mars, Jezero crater", "Venus, surface", "Saturn, 1 bar level", "Earth, heliox at 300 m (saturation dive)", "Earth, sea level"]) {
+    const before = await gain();
     await page.locator(".atmo-presets .chip", { hasText: place }).click();
+    const held = await gain();
+    logs.push(`[${tag}] air gain into ${place}: ${before.toFixed(1)} -> ${held.toFixed(1)}`);
+    if (!(held >= 0 && held <= 1)) errors.push(`[${tag}] gain ${held} carried into ${place} before its loudness was measured`);
     await page.keyboard.down("d");
     await page.waitForTimeout(700);
     const level = await rms();

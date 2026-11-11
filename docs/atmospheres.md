@@ -23,8 +23,17 @@ bit-identically and no golden test moves. `Engine::set_gas` rebuilds the voice a
 tube keeps a minimum number of sections. In a fast gas (hydrogen at 37 °C is about 1050 m/s, heliox about
 990) those sections are shorter than the limit allows at the usual rate, and the voice blows up (a human on
 Saturn: CFL 1.62 at 96 kHz). `human_voice::airway_for` and `CreatureVoice::new_in` raise the oversampling
-until the airway's Courant number is under `physics::MAX_CFL` (0.95). Air's worst case is 0.91 (the child
-body), so air never raises it.
+until the airway's Courant number is under `physics::MAX_CFL` (0.95), through `physics::stable_oversample`.
+In air at 44.1 kHz and above nothing moves (the golden fixtures stand). Below that, air raises it too: the
+child body's piriform fossa keeps three sections, a Courant number of 1.11 at 8, 16 and 32 kHz, where the
+child voice ran at the limiter ceiling (peak 0.75, three times the RMS of 48 kHz). The same check fixes it;
+`tests/atmosphere.rs` holds every body at every rate from 8 to 192 kHz, in air and in every preset.
+
+**Cost.** CPU follows the internal rate times the section count. A fast gas raises the rate (Saturn and
+heliox: 2 to 4 at 48 kHz); a slow one adds sections (a breath of SF6: 83 for the male tract against 36 in air). A gas
+change rebuilds the voice, as a body switch does: it allocates, and `Engine::set_gas` skips a gas that is
+already set or not physical (an empty mix). The page measures loudness on the main thread, 0.6 s of voice
+(about 200 ms), once a change has settled.
 
 ## From conditions to a gas (`atmosphere.rs`)
 
@@ -83,3 +92,7 @@ source and tract do) and the pressure at a listener. The page plays every place 
   gas would lower a self-oscillating fold.
 - Propagation between the mouth and the listener: absorption, dispersion and delay over distance.
 - Dense-fluid viscosity: viscosity is the dilute gas's at every pressure.
+- Lung pressure against ambient: the lungs push the same overpressure in every place, while the gas's
+  density is taken at the ambient pressure. Where ambient is low (Mars, Olympus Mons, Pluto) that
+  overpressure is from one to 700 times ambient, far outside linear acoustics; Pluto's +10.2 dB at the
+  source leans on it.

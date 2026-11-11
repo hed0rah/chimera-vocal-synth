@@ -224,6 +224,20 @@ export class AudioEngine {
     this.setVolume(this.volume);
   }
 
+  /**
+   * At once, no ramp: the level a voice in a new gas may play at until its loudness is measured.
+   * A gain above 1 belongs to the old gas: kept, Venus's 650x (its -56 dB made up) met the next
+   * place's full-level voice for the quarter second before the new measurement.
+   */
+  holdLevel(): void {
+    if (this.level <= 1) return;
+    this.level = 1;
+    if (this.master && this.ctx) {
+      this.master.gain.cancelScheduledValues(this.ctx.currentTime);
+      this.master.gain.setValueAtTime(this.volume, this.ctx.currentTime);
+    }
+  }
+
   /** Coalesced: a dragged condition rebuilds the voice at most once per frame. */
   setGas(gas: { rho: number; c: number; mu: number }): void {
     this.pendingGas = gas;

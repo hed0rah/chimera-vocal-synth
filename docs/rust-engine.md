@@ -62,6 +62,7 @@ port can be reviewed file against file. `chimera::engine::Engine` is the old pro
 - **Commands that allocate.** These are meant for when nothing is sounding, or for a host that
   builds things off the audio thread:
   - a body switch (it builds a new airway network);
+  - a gas switch (`set_gas`: the same rebuild, in the new gas);
   - a creature switch;
   - the first `Engine::new` (it also loads the phonetics tables, so nothing initialises lazily
     on the audio thread later).
@@ -177,7 +178,7 @@ consumption or sums (noise sources, gestures). It retunes nothing. The checks:
 `chimera` as a path or git dependency:
 
 - **`Engine::new(sample_rate)`** with:
-  - commands as methods: `set_body`, `set_artic`, `set_source`, `set_gate`, `schedule`,
+  - commands as methods: `set_body`, `set_gas`, `set_artic`, `set_source`, `set_gate`, `schedule`,
     `release`, `stop_speech`, `set_beat_*`, `beat_hit`, `set_creature`, `set_creature_params`,
     `play_call` and `stop_call`;
   - `render(&mut [f32])`;

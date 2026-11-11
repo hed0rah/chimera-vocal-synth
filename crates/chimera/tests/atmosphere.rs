@@ -36,12 +36,12 @@ fn gases_at_room_temperature_match_handbook_values() {
     assert!((130.0..140.0).contains(&c), "SF6 c {c}");
 }
 
-/// Real-fluid c, rho and mu (CoolProp, GERG-style mixing; Wilke mixing for mu) for the same
-/// conditions as the presets, from the databurn planetary-acoustics model (venus_saturn.json).
-/// The ideal model's errors are largest where the gas is least ideal: Venus at 92 bar, cold
-/// Titan; and its Sutherland viscosity is poor for hydrogen below 150 K (Saturn, Neptune).
+/// Real-fluid c, rho and mu at each preset's outside conditions, computed with CoolProp: its HEOS
+/// mixture backend (GERG-style mixing) for c and rho, Wilke's rule over its pure-fluid
+/// viscosities for mu. Sutherland's viscosity is poor for hydrogen below 150 K (Saturn, Neptune),
+/// hence the wider tolerance on mu there.
 #[test]
-fn the_ideal_model_tracks_real_fluid_values_at_every_site() {
+fn the_model_tracks_real_fluid_values_at_every_site() {
     let real: &[(&str, f64, f64, f64, f64)] = &[
         // id, c m/s, rho kg/m³, mu Pa s, mu tolerance
         ("venus_surface", 421.05, 64.759, 3.3806e-5, 0.10),
@@ -194,4 +194,99 @@ fn the_real_gas_model_tracks_reference_equations_of_state() {
     let venus = atmosphere::preset("venus_surface").unwrap().conditions(Breather::Human).airway();
     assert!(venus.near_critical && venus.state.compressibility < 0.4);
     assert!(!Conditions::EARTH.airway().near_critical);
+}
+
+const RATES: [f64; 10] = [8000.0, 16000.0, 22050.0, 24000.0, 32000.0, 44100.0, 48000.0, 88200.0, 96000.0, 192000.0];
+
+/// Pure hydrogen at 800 K, the panel's hottest airway: the fastest gas it can make.
+fn hottest_hydrogen() -> Gas {
+    let mut mix = [0.0; atmosphere::N_SPECIES];
+    mix[Species::H2 as usize] = 1.0;
+    Conditions { mix, pressure: atmosphere::ATM, temperature: 800.0, airway_temperature: 800.0, airway_humidity: 0.0 }.gas()
+}
+
+/// Every body at every rate, in air, in every preset and in the fastest gas, builds an airway under
+/// the Courant limit; in air at 44.1 kHz and above the oversampling is upstream's (the goldens stand).
+#[test]
+fn every_airway_is_built_under_the_courant_limit() {
+    use chimera::anatomy::human::{BODY_CHILD, BODY_FEMALE};
+    use chimera::physics::MAX_CFL;
+    use chimera::voice::human_voice::{airway_for, oversample_for};
+    let mut gases = vec![("air", Gas::BODY_AIR), ("hottest hydrogen", hottest_hydrogen())];
+    for p in PRESETS {
+        gases.push((p.id, p.conditions(Breather::Human).gas()));
+        gases.push((p.id, p.conditions(Breather::Native).gas()));
+    }
+    for (name, body) in [("male", BODY_MALE), ("female", BODY_FEMALE), ("child", BODY_CHILD)] {
+        for fs in RATES {
+            for &(id, gas) in &gases {
+                let (m, a) = airway_for(fs, body, oversample_for(fs), gas);
+                let cfl = a.net.check_cfl();
+                assert!(cfl <= MAX_CFL, "{name} at {fs} Hz in {id}: CFL {cfl:.3} at m {m}");
+                if id == "air" && fs >= 44100.0 {
+                    assert_eq!(m, oversample_for(fs), "{name} at {fs} Hz in air");
+                }
+            }
+        }
+    }
+}
+
+/// The child voice at a Bluetooth headset's rates sounds as it does at 48 kHz. Its piriform fossa
+/// (three sections) was at a Courant number of 1.11 at 8, 16 and 32 kHz: the voice ran at the
+/// limiter ceiling, peak 0.75 and three times the RMS.
+#[test]
+fn the_child_voice_holds_at_low_rates() {
+    use chimera::anatomy::human::BodyMix;
+    let held = |fs: f64| {
+        let mut e = Engine::new(fs);
+        e.set_body(BodyMix::new(0.0, 1.0));
+        e.set_gate(1.0);
+        let mut out = vec![0.0f32; 2 * fs as usize];
+        for chunk in out.chunks_mut(128) {
+            e.render(chunk);
+        }
+        let tail = &out[fs as usize..];
+        (tail.iter().map(|&x| (x as f64) * (x as f64)).sum::<f64>() / tail.len() as f64).sqrt()
+    };
+    let reference = held(48000.0);
+    for fs in [8000.0, 16000.0, 22050.0, 24000.0, 32000.0] {
+        let rms = held(fs);
+        assert!(rms > 0.7 * reference && rms < 1.4 * reference, "{fs} Hz: RMS {rms:.3}, 48 kHz {reference:.3}");
+    }
+}
+
+/// Every creature at an 8 kHz output in the fastest gas builds under the Courant limit and sings.
+#[test]
+fn every_creature_holds_in_the_fastest_gas_at_a_low_rate() {
+    use chimera::creatures::{CREATURES, CreatureVoice};
+    use chimera::physics::MAX_CFL;
+    chimera::creatures::init();
+    let gas = hottest_hydrogen();
+    for def in CREATURES.iter() {
+        let mut v = CreatureVoice::new_in(def, 8000.0, gas, &[]);
+        if let Some(n) = v.sim.net() {
+            assert!(n.check_cfl() <= MAX_CFL, "{}: CFL {:.3} at m {}", def.id, n.check_cfl(), v.m);
+        }
+        v.set_gate(1.0);
+        v.play_call(0, None, 1.0);
+        let mut out = vec![0.0f32; 8000];
+        v.render(&mut out);
+        assert!(out.iter().all(|x| x.is_finite()), "{}: not finite", def.id);
+    }
+}
+
+/// An empty mix has no state; the engine refuses it and keeps sounding in the gas it had.
+#[test]
+fn the_engine_refuses_a_gas_that_is_not_physical() {
+    let empty = Conditions { mix: [0.0; atmosphere::N_SPECIES], pressure: atmosphere::ATM, temperature: 288.15, airway_temperature: 288.15, airway_humidity: 0.0 };
+    let g = empty.gas();
+    assert!(!g.is_physical(), "an empty mix gave {g:?}");
+    let mut e = Engine::new(48000.0);
+    let before = e.info();
+    let after = e.set_gas(g);
+    assert_eq!((before.n_ph, before.n_or), (after.n_ph, after.n_or));
+    e.set_gate(1.0);
+    let mut out = vec![0.0f32; 24000];
+    e.render(&mut out);
+    assert!(out.iter().all(|x| x.is_finite()) && out.iter().any(|x| x.abs() > 1e-3));
 }
